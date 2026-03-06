@@ -55,6 +55,20 @@ When a member replies, the cockpit will inject their message into your terminal 
 - Leader must perform final review and merge decision.
 - Leader merges only after explicit review pass.
 
+## Review Checklist (Leader)
+
+Before merge, Leader must verify at least:
+
+- PR scope matches delegated task
+- changed files are expected
+- issue linkage is present in PR body (example: `Closes CON-85`)
+- validation command result is included and reasonable (for Tauri compile issues, `cd src-tauri && cargo check`)
+
+After merge:
+
+- report merge result (PR URL + merge commit) to operator
+- request orchestrator post-merge sync/cleanup
+
 ## Worktree
 
 All work must be done in a dedicated git worktree. When delegating a task to a member, instruct them to use the following worktree path:
