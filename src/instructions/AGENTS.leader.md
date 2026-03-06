@@ -46,6 +46,24 @@ When a member replies, the cockpit will inject their message into your terminal 
 4. Wait for member reports
 5. Integrate results and report back to the operator
 
+## Worktree
+
+All work must be done in a dedicated git worktree. When delegating a task to a member, instruct them to use the following worktree path:
+
+```
+./.wt/<feature-name>
+```
+
+where `<feature-name>` is derived from the task name with `/` replaced by `-`.
+
+Example: a task named `feature/pty-backend` → `./.wt/feature-pty-backend`
+
+Create the worktree before delegating:
+
+```bash
+git worktree add ./.wt/<feature-name> -b <feature-name>
+```
+
 ## Rules
 
 - Only delegate tasks that are clearly scoped and actionable

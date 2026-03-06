@@ -39,6 +39,26 @@ When the Leader sends you a message, the cockpit will inject it into your termin
 3. Report progress or blockers to the Leader using `@Leader:` format
 4. When complete, report the result to the Leader
 
+## Worktree
+
+All work must be done in the git worktree specified by the Leader. The path follows this format:
+
+```
+./.wt/<feature-name>
+```
+
+where `<feature-name>` is derived from the task name with `/` replaced by `-`.
+
+Example: a task named `feature/pty-backend` → `./.wt/feature-pty-backend`
+
+Move into the worktree before starting any work:
+
+```bash
+cd ./.wt/<feature-name>
+```
+
+All file edits, commits, and commands must be run from within this worktree directory.
+
 ## Rules
 
 - Focus only on your assigned sub-task
