@@ -75,6 +75,7 @@ Before merge, Leader must verify at least:
 - required CI check `required-frontend-check / frontend-build` is green before merge
 - PR does not include unrelated commits/files from other tasks or instruction-only edits
 - proof-of-work is complete: validation logs, CI links, and issue linkage are present
+- branch is up to date with latest `origin/master` (if `mergeStateStatus` is `DIRTY`, require member rebase/resolve first)
 
 After merge:
 
@@ -96,6 +97,13 @@ git worktree remove ./.wt/<feature-name>
 git branch -d <feature-name>
 ```
 
+If `gh pr merge --delete-branch` fails with "branch used by worktree":
+
+1. verify PR is merged
+2. remove worktree
+3. delete local branch
+4. continue with main-branch sync
+
 ## Branch Hygiene (before PR)
 
 Before approving Member PR creation, require:
@@ -103,6 +111,7 @@ Before approving Member PR creation, require:
 - branch is rebased onto latest `origin/master`
 - only task-related commits remain in the branch
 - no cross-task file changes
+- rebase is performed after recently merged dependent PRs (not only at task start)
 
 If dirty history exists, fix branch (for example rebase/cherry-pick) before review.
 

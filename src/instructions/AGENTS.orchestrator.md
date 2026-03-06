@@ -79,6 +79,11 @@ Recommended additions:
    - Re-read tracker state for claimed tasks.
    - If task becomes ineligible (canceled/duplicate/done), stop dispatch/retries and release claim.
 
+9. Completion signal must be explicit.
+   - Treat run as `in_review` only when member emits final one-line report (for example `@Leader: <task-id> in_review...`).
+   - Do not infer completion from intermediate artifacts only (commit/PR creation/test start).
+   - Keep run `in_progress` while terminal stream is active without final report.
+
 ## Submit Key Mapping (important)
 
 In Codex TUI panes, submission is triggered by `Ctrl+S` in this environment.
@@ -173,6 +178,12 @@ logs/codex/<task-id>/<timestamp>.jsonl
 
 Use this path for user-facing traceability instead of tmux keystroke-only operation.
 
+Completion detection heuristic (required):
+
+- Positive signal: final `@Leader:` handoff line appears in run log.
+- Negative signal: process ended without final handoff line.
+- On negative signal, mark `failed_needs_resume` and re-dispatch resume prompt with same worktree/branch.
+
 Note:
 
 - Member worktrees store logs in each worktree path (for example `./.wt/con-21/logs/...`).
@@ -213,6 +224,12 @@ Safety:
 - Do not force-remove by default.
 - If removal fails, report with reason and keep task state as `done_cleanup_pending`.
 - Do not try deleting local branch before worktree removal (branch may be locked by worktree).
+
+Main-branch sync safety:
+
+- If `master`/`main` fast-forward pull fails due to divergence, do not force reset.
+- Preserve local user changes; prefer rebase flow with conflict reporting.
+- If autostash creates conflicts, keep stash entry and report explicit recovery instruction to Leader.
 
 ## Batch Retrospective Update (mandatory)
 

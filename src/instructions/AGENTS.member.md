@@ -57,6 +57,8 @@ Execution discipline (Symphony-style):
 - Rebase your task branch onto latest `origin/master` before PR creation.
 - Do not include unrelated commits/files (especially instruction/document updates from other flows).
 - Provide proof-of-work in completion report: CI/check status + key validation commands.
+- If another PR was merged while you were working, rebase again before final merge-ready handoff.
+- Prefer `gh pr create --body-file <file>` when PR body contains backticks/shell-sensitive text.
 
 Preferred completion format:
 
@@ -69,6 +71,12 @@ Preferred in-review handoff format (when waiting leader review):
 ```text
 @Leader: <task-id> in_review. commit=<hash> validation='<command>: ok' pr=<url> risks='<short-note|none>'
 ```
+
+Before sending the final handoff line, ensure:
+
+- Linear comment is posted in required format (if requested in assignment)
+- PR URL is live and issue linkage is present
+- validation command text in handoff exactly matches what was run
 
 If blocked by dependency on another task, report explicitly:
 
