@@ -12,7 +12,7 @@ dev-web:
 
 .PHONY: build
 build:
-	pnpm tauri build
+	$(MAKE) -C src-tauri build
 
 .PHONY: fmt
 fmt:
@@ -20,4 +20,5 @@ fmt:
 
 .PHONY: clean
 clean:
-	rm -rf node_modules dist src-tauri/target
+	rm -rf node_modules dist
+	$(MAKE) -C src-tauri clean
