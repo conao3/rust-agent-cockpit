@@ -252,3 +252,4 @@ At the end of every batch:
 5. If already active, switch to closeout flow (review/merge/Done/cleanup) instead of re-dispatching implementation.
 6. Enforce silent startup reads for member runs (`cat ... >/dev/null`); do not emit full memory file contents into run logs.
 7. For parallel dispatch, prefer domain-separated pairings (for example frontend + backend) to reduce overlap risk.
+8. Reject member handoff if PR includes unrelated `src/instructions/*` changes unless the assignment explicitly required instruction updates.

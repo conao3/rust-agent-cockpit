@@ -140,6 +140,7 @@ Visibility discipline for each active member:
 - At batch start, check if selected issue already has an open PR or `In Review` status; if so, run closeout (review/merge/Done/cleanup) and do not dispatch duplicate implementation.
 - Prefer frontend/backend-separated task pairing for parallel runs when possible.
 - Require startup memory reads to be silent (no full file dumps in logs), then begin ACK/heartbeat flow.
+- If an implementation PR contains unrelated `src/instructions/*` edits, request member cleanup/rebase before merge.
 
 ## Worktree
 
