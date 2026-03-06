@@ -250,3 +250,5 @@ At the end of every batch:
 3. Apply updates before starting the next batch.
 4. Before dispatching a "next batch", check whether candidate tasks are already `In Review` or have open PRs.
 5. If already active, switch to closeout flow (review/merge/Done/cleanup) instead of re-dispatching implementation.
+6. Enforce silent startup reads for member runs (`cat ... >/dev/null`); do not emit full memory file contents into run logs.
+7. For parallel dispatch, prefer domain-separated pairings (for example frontend + backend) to reduce overlap risk.

@@ -93,6 +93,7 @@ Progress visibility requirements:
 - After start ACK, post short heartbeat updates at reasonable intervals while long-running validation/build is in progress.
 - If your process exits unexpectedly, immediately report `@Leader: <task-id> failed_needs_resume ...` with last completed step.
 - If Leader assigns a task that already has an active PR for your branch/issue, report that PR immediately and ask whether to continue as rework or closeout support.
+- Keep startup reads silent (`cat ... >/dev/null`) and avoid printing full memory file contents to task logs.
 
 ## Worktree
 
