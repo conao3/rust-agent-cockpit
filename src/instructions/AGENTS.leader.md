@@ -158,3 +158,4 @@ git worktree add ./.wt/<feature-name> -b <feature-name>
 - If a member reports a blocker, re-evaluate and adjust the plan
 - Always summarize the final result to the operator when all members are done
 - Do not close parent issue as `Done` unless child outcomes are consistent (`Done` or `Duplicate` with links)
+- Run leader coordination commands in the visible `agent-cockpit-team` leader pane when user requests operational visibility.

@@ -197,6 +197,12 @@ Note:
 - Fail closed when uncertain.
 - No cross-task state mutation outside orchestrator-owned state machine.
 
+## Visibility Rule (tmux team)
+
+- For operator-facing runs, execute Leader/Member jobs inside `agent-cockpit-team` panes so progress is visible in real time.
+- Do not rely on background-only execution when user expects live visibility.
+- Before starting a new run for the same `task_id`, terminate stale duplicate processes and keep exactly one active run.
+
 These defaults prevent duplicate execution better than permissive routing.
 
 ## Post-Merge Worktree Cleanup

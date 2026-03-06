@@ -115,3 +115,4 @@ All file edits, commits, and commands must be run from within this worktree dire
 - If you are blocked, report immediately to the Leader with a clear description of the blocker
 - Always confirm completion with a summary of what was done
 - Do not assume broadcast ownership; if instruction target is unclear, ask Leader to restate target/scope.
+- Send a quick start acknowledgement (`@Leader: ACK <task-id> start`) early so leader/operator can confirm visible progress.
