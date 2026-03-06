@@ -1,17 +1,17 @@
 # AGENTS.member.md
 
-Member runbook for implementation tasks under Leader control.
+Member execution runbook for delegated tasks.
 
-## 1. Responsibility
+## A. Core Responsibility
 
-- Execute only delegated scope.
-- Work only in assigned worktree/branch.
-- Provide timely status/evidence to Leader.
-- Do not merge PRs yourself.
+- implement only delegated scope
+- work only in assigned worktree/branch
+- send timely, structured updates to Leader
+- do not merge PRs
 
-## 2. Messaging Protocol
+## B. Message Format
 
-Use Leader-directed lines only:
+All outbound messages use:
 
 ```text
 @Leader: <message>
@@ -20,74 +20,72 @@ Use Leader-directed lines only:
 Required lifecycle messages:
 
 - start ACK: `@Leader: ACK <task-id> start`
-- periodic heartbeat within contract window
-- blocker report with reason and last completed step
-- final handoff (`in_review` or `done`) with evidence
+- periodic heartbeat within SLO
+- blocker report (`reason`, `last_step`)
+- final handoff with evidence
 
-If task is re-injected/restarted, ACK again with same `task_id`.
+If run is reinjected/restarted, ACK again with same `task_id`.
 
-## 3. Scope and Hygiene
+## C. Scope and Repo Hygiene
 
-- Stay inside assigned files/areas.
-- Avoid broad repo scans when path-scoped search is enough.
-- Never include `src/instructions/*` in implementation PR unless explicitly requested.
-- Never commit runtime artifact dirs (e.g. `src-tauri/logs/`) unless requested.
+- keep edits within assigned files/areas
+- avoid unnecessary wide scans
+- do not include `src/instructions/*` in implementation PR unless explicitly requested
+- do not commit runtime artifacts (e.g. `src-tauri/logs/`) unless requested
 
-## 4. Branch and PR Hygiene
+## D. Branch Hygiene
 
-Before final handoff:
+Before handoff:
 
-- ensure branch contains only task-relevant changes
-- rebase/update per Leader instruction
-- if rewrite/rebase changes head SHA, report updated SHA
-- if conflicts resolved, include short conflict note
+- ensure task-pure commits
+- apply Leader-requested rebase/update
+- report updated SHA after rewrite/rebase
+- include short conflict note if conflict resolved
 
-MemberA creates PR when requested and shares URL promptly.
+## E. Evidence Contract (`in_review`)
 
-## 5. `in_review` Evidence Contract
-
-Final handoff must include:
+Handoff must include:
 
 - `task_id`
 - PR URL
 - head SHA
-- validations run + result
+- validation commands and results
 - changed-files summary
-- risks/blockers note (`none` if not applicable)
+- risks note (`none` if not applicable)
 
-Recommended:
+Template:
 
 ```text
 @Leader: <task-id> in_review. commit=<sha> pr=<url> validation='<cmds: ok>' files='<summary>' risks='<none|...>'
 ```
 
-If blocked:
+Blocked template:
 
 ```text
 @Leader: <task-id> blocked. reason=<short-reason> last_step=<summary>
 ```
 
-## 6. Timing SLO
+## F. Timing SLO
 
-Default unless overridden:
+Default SLO unless overridden:
 
-- ACK <= 10 minutes
-- heartbeat <= 20 minutes
+- ACK <= 10m
+- heartbeat <= 20m
 
-If SLO cannot be met, report immediately.
+If SLO breach risk appears, report immediately.
 If process exits unexpectedly, report `failed_needs_resume` with last completed step.
 
-## 7. Validation Discipline
+## G. Validation Rules
 
-- Run exact validations requested in dispatch contract.
-- After base update/rebase/conflict fix, rerun required validations.
-- If CI is pending/failing after PR, report status and wait for Leader direction.
+- run exact validations from dispatch contract
+- rerun required validations after base update/rebase/conflict fix
+- if CI pending/failing, report status and wait for Leader instruction
 
-## 8. Post-Handoff Behavior
+## H. After `in_review`
 
-After sending `in_review`, stop new feature changes unless Leader explicitly requests follow-up fixes.
-If evidence was incorrect (e.g. wrong SHA), send superseding corrected handoff immediately.
+After `in_review` handoff, stop feature edits unless Leader asks for follow-up.
+If any evidence was wrong (e.g. SHA typo), send superseding corrected handoff immediately.
 
-## 9. End-of-Batch Contribution
+## I. End-of-Batch Input
 
-Provide concise implementation lessons so Leader can update the three AGENTS docs coherently.
+Include concise lessons learned so Leader can recompose AGENTS docs cleanly each batch.

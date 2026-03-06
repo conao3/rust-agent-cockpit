@@ -1,45 +1,44 @@
 # AGENTS.orchestrator.md
 
-Backend orchestration policy for agent-cockpit.
+Canonical backend policy for agent-cockpit orchestration.
 
-## 1. Mission
+## A. Scope of Orchestrator
 
-Operate task execution as isolated, auditable runs.
+Orchestrator responsibilities:
 
-- Orchestrator owns routing, state, retry, reconciliation, and evidence logging.
-- Leader owns engineering judgment, merge decision, and completion judgment.
-- Members own implementation in assigned worktrees.
+- strict routing and dispatch
+- run lifecycle state management
+- dedupe, ownership lock, retry, reconciliation
+- heartbeat/liveness monitoring
+- evidence/audit logging
 
-## 2. Run Unit
+Non-responsibilities:
 
-Each run is identified by `task_id` and has:
+- no feature implementation
+- no PR quality judgment or merge decision (Leader responsibility)
 
-- one owner (`MemberA` or `MemberB`)
-- one workspace (`./.wt/<feature-name>`)
-- monotonic status (`queued -> sent -> acknowledged -> in_progress -> in_review -> done`, plus `failed`)
-- evidence bundle (PR, SHA, validations, changed files, CI, Linear link)
+## B. Run Contract
 
-No completion inference from partial signals. Final handoff line is required.
+A run is identified by `task_id` and must keep:
 
-## 3. Routing Rules
+- owner: `MemberA` or `MemberB`
+- workspace: `./.wt/<feature-name>`
+- status: `queued|sent|acknowledged|in_progress|in_review|done|failed`
+- evidence bundle: PR URL, head SHA, validations, changed-files summary
 
-Accepted prefixes:
+Transition is monotonic; ignore stale/out-of-order events.
 
-- `@MemberA: ...`
-- `@MemberB: ...`
-- `@AllMembers: ...` (explicit broadcast only)
+## C. Routing Grammar
 
-If recipient is ambiguous or missing, reject:
+Accepted directives:
 
-```text
-@Orchestrator: Invalid recipient. Use @MemberA:, @MemberB:, or explicit @AllMembers:.
-```
+- `@MemberA: <message>`
+- `@MemberB: <message>`
+- `@AllMembers: <message>` (explicit broadcast only)
 
-No implicit broadcast and no recipient inference.
+Ambiguous/missing target must be rejected.
 
-## 4. Required Metadata Envelope
-
-Every dispatch record must include:
+## D. Required Dispatch Metadata
 
 - `message_id` (UUID)
 - `task_id`
@@ -49,102 +48,89 @@ Every dispatch record must include:
 - `workspace`
 - `dedupe_key`
 - `timestamp`
-- `status`
+- current `status`
 
-## 5. Delivery and ACK
+## E. Delivery and Ownership Rules
 
-1. Deliver to one target pane unless explicit broadcast.
-2. Send text and submit action separately.
-3. Enforce task ownership lock (`task_id -> owner_member`).
-4. Wait for ACK within contract SLO (default ACK <= 10m).
-5. If ACK timeout, re-inject in same member pane immediately.
-6. Retry with bounded attempts + exponential backoff.
-7. Reassignment requires explicit Leader override.
+1. one target only unless explicit broadcast
+2. text send and submit action are separated
+3. ownership lock: one active owner per `task_id`
+4. ACK timeout => immediate same-pane reinjection (same owner)
+5. bounded retries with backoff
+6. reassignment only with explicit Leader override
 
-## 6. Visibility and Startup Validation
+## F. Visibility Rules (tmux)
 
-For operator-visible runs in `agent-cockpit-team`:
+For operator-visible runs (`agent-cockpit-team`):
 
-- sanitize pane input first (`Ctrl-C`)
-- send one clean command
-- declare start only after `task_id`, `log:`, and `thread.started` are observed
-- enforce heartbeat SLO (default <= 20m)
+- sanitize pane input (`Ctrl-C`) before dispatch
+- launch one clean command
+- start confirmation requires `task_id`, `log`, and `thread.started`
+- monitor SLO: ACK <= 10m, heartbeat <= 20m (unless overridden)
 
-Preferred launcher:
+Preferred runner:
 
 ```bash
 ./scripts/codex_exec_visible.sh <task-id> "<prompt>"
 ```
 
-## 7. Dedupe, Concurrency, Reconciliation
+## G. Acceptance Rules
 
-- suppress duplicate active dispatches by `dedupe_key`
-- only one active run per `(task_id, member)`
-- bounded concurrency with queueing
-- poll-based reconciliation cancels ineligible runs (`Done`, `Duplicate`, canceled)
+Accept `in_review` only with complete evidence bundle.
 
-## 8. Evidence Acceptance Rules
+If branch rewrite/rebase changes SHA:
 
-`in_review` is accepted only when handoff includes all:
+- require refreshed evidence comment with new SHA
+- if prior SHA was wrong, require explicit superseding correction
 
-- PR URL
-- head SHA
-- validations + results
-- changed-files summary
+## H. Closeout Gate
 
-If branch rewrite/rebase changes SHA, require refreshed evidence comment.
-If an evidence SHA was wrong, require superseding corrected evidence before closeout.
-
-## 9. Closeout Gate
-
-A task becomes `done` only when all are true:
+`done` only when all pass:
 
 1. PR merged
-2. Linear moved to `Done` (or `Duplicate` with link)
+2. Linear moved to `Done` or `Duplicate` with link
 3. worktree removed
-4. feature branches cleaned (local/remote as applicable)
+4. feature branch cleanup complete
 5. local `master` synced non-destructively
 
-Safety:
+Safety rules:
 
-- never use destructive reset in closeout flow
-- never remove worktree for unmerged PR
-- never delete branch before attached worktree removal
+- no destructive reset
+- no worktree removal on unmerged PR
+- no branch delete before worktree detach
 
-## 10. CI Blocker Policy
+## I. Blocker Handling
 
-If required checks are pending/failing:
+If required checks fail:
 
 - keep issue in `In Review`
 - emit blocker heartbeat
-- dispatch focused fix to owner
+- dispatch focused remediation to owner
 - require fresh green required checks before merge
 
 Known failure pattern:
 
-- GitHub Actions `Unable to locate executable file: pnpm`
-- common fix: ensure `pnpm/action-setup` is executed before Node setup/cache usage
+- CI error `Unable to locate executable file: pnpm`
+- validate setup ordering so `pnpm` is available before dependent steps
 
-## 11. Batch Policy
+## J. Batch Policy
 
-Before next batch launch:
+Every batch follows:
 
-1. apply closeout-first for current `In Review` issues
-2. if none, select next actionable work
-3. if `Todo/In Progress` empty, pick from `Backlog` with non-overlapping domains
-4. publish explicit mapping (`memberA=<issue> memberB=<issue>`)
-5. update orchestrator/leader/member docs with distilled lessons
+1. closeout-first sweep
+2. if none in-review, pick exactly two non-overlapping actionable issues
+3. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
+4. enforce full contract (scope/validation/SLO/evidence)
+5. recompose AGENTS docs as one coherent set before next batch
 
-## 12. Audit Log Fields
+## K. Audit Fields
 
-Log at least:
+Log minimum fields:
 
-- recipient parse result
+- parse result
 - pane target
-- `message_id`, `task_id`, `attempt`
-- dedupe hit/miss
-- ownership lock actions
-- retry count
-- workspace path
-- status transitions
+- `task_id`, `message_id`, `attempt`
+- dedupe/lock actions
+- retries and timers
+- state transitions
 - evidence links (PR/CI/Linear comment IDs)
