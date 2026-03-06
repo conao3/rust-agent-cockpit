@@ -1,13 +1,16 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
+#[cfg(not(test))]
+use std::{fs::{create_dir_all, OpenOptions}, path::Path};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{Read, Write},
     sync::{
         atomic::{AtomicU64, Ordering},
         Mutex,
     },
     thread::JoinHandle,
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, State};
 
@@ -27,6 +30,120 @@ struct PtySession {
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
     reader: Option<JoinHandle<()>>,
+}
+
+#[derive(Default)]
+struct MonitoringManager {
+    state: Mutex<MonitoringState>,
+}
+
+#[derive(Default)]
+struct MonitoringState {
+    task_states: HashMap<String, TaskLifecycleRecord>,
+    seen_event_keys: HashSet<String>,
+}
+
+#[derive(Debug, Clone)]
+struct TaskLifecycleRecord {
+    task_id: String,
+    member: String,
+    state: TaskLifecycleState,
+    last_event_id: Option<String>,
+    updated_at_ms: u64,
+    history_len: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TaskLifecycleState {
+    Sent,
+    Ack,
+    InProgress,
+    Done,
+    Failed,
+}
+
+impl TaskLifecycleState {
+    fn rank(self) -> u8 {
+        match self {
+            Self::Sent => 0,
+            Self::Ack => 1,
+            Self::InProgress => 2,
+            Self::Done | Self::Failed => 3,
+        }
+    }
+
+    fn is_terminal(self) -> bool {
+        matches!(self, Self::Done | Self::Failed)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum LifecycleDecision {
+    Applied,
+    Duplicate,
+    Stale,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LifecycleIngestRequest {
+    task_id: String,
+    member: String,
+    state: TaskLifecycleState,
+    message_id: Option<String>,
+    dedupe_key: Option<String>,
+    source: Option<String>,
+}
+
+impl LifecycleIngestRequest {
+    fn event_key(&self) -> String {
+        if let Some(dedupe_key) = self
+            .dedupe_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+        {
+            return dedupe_key.to_string();
+        }
+        format!(
+            "{}:{}:{:?}:{}",
+            self.task_id,
+            self.member,
+            self.state,
+            self.message_id.clone().unwrap_or_default()
+        )
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LifecycleIngestResponse {
+    decision: LifecycleDecision,
+    task_id: String,
+    member: String,
+    current_state: TaskLifecycleState,
+    event_key: String,
+    updated_at_ms: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LifecycleStateQueryRequest {
+    task_id: String,
+    member: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct LifecycleStateResponse {
+    task_id: String,
+    member: String,
+    state: TaskLifecycleState,
+    last_event_id: Option<String>,
+    updated_at_ms: u64,
+    history_len: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,6 +203,127 @@ fn default_shell() -> String {
     std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string())
 }
 
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn lifecycle_key(task_id: &str, member: &str) -> String {
+    format!("{}::{}", task_id.trim(), member.trim())
+}
+
+#[cfg(not(test))]
+fn log_monitoring_event(value: serde_json::Value) {
+    eprintln!("[monitoring] {}", value);
+    let path = Path::new("logs/monitoring/lifecycle.jsonl");
+    if let Some(parent) = path.parent() {
+        if create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{value}");
+    }
+}
+
+#[cfg(test)]
+fn log_monitoring_event(_value: serde_json::Value) {}
+
+impl MonitoringState {
+    fn ingest(&mut self, req: LifecycleIngestRequest, now: u64) -> LifecycleIngestResponse {
+        let event_key = req.event_key();
+        let key = lifecycle_key(&req.task_id, &req.member);
+
+        if self.seen_event_keys.contains(&event_key) {
+            let fallback_state = req.state;
+            let (current_state, updated_at_ms) = self
+                .task_states
+                .get(&key)
+                .map(|record| (record.state, record.updated_at_ms))
+                .unwrap_or((fallback_state, now));
+            return LifecycleIngestResponse {
+                decision: LifecycleDecision::Duplicate,
+                task_id: req.task_id,
+                member: req.member,
+                current_state,
+                event_key,
+                updated_at_ms,
+            };
+        }
+
+        self.seen_event_keys.insert(event_key.clone());
+        let mut previous_state: Option<TaskLifecycleState> = None;
+        let mut decision = LifecycleDecision::Applied;
+        let record = self
+            .task_states
+            .entry(key)
+            .or_insert_with(|| TaskLifecycleRecord {
+                task_id: req.task_id.clone(),
+                member: req.member.clone(),
+                state: req.state,
+                last_event_id: req.message_id.clone(),
+                updated_at_ms: now,
+                history_len: 0,
+            });
+
+        if record.history_len > 0 {
+            previous_state = Some(record.state);
+            let stale = record.state.is_terminal()
+                || req.state.rank() < record.state.rank()
+                || (req.state.rank() == record.state.rank() && req.state != record.state);
+            if stale {
+                decision = LifecycleDecision::Stale;
+            }
+        }
+
+        if decision == LifecycleDecision::Applied {
+            record.state = req.state;
+            record.last_event_id = req.message_id.clone();
+            record.updated_at_ms = now;
+        }
+        record.history_len += 1;
+
+        log_monitoring_event(serde_json::json!({
+            "event": "lifecycle_ingest",
+            "decision": decision,
+            "task_id": req.task_id,
+            "member": req.member,
+            "source": req.source.unwrap_or_else(|| "backend".to_string()),
+            "message_id": req.message_id,
+            "event_key": event_key,
+            "previous_state": previous_state,
+            "current_state": record.state,
+            "updated_at_ms": record.updated_at_ms,
+            "history_len": record.history_len,
+        }));
+
+        LifecycleIngestResponse {
+            decision,
+            task_id: record.task_id.clone(),
+            member: record.member.clone(),
+            current_state: record.state,
+            event_key,
+            updated_at_ms: record.updated_at_ms,
+        }
+    }
+
+    fn get_state(&self, task_id: &str, member: &str) -> Option<LifecycleStateResponse> {
+        let key = lifecycle_key(task_id, member);
+        self.task_states
+            .get(&key)
+            .map(|record| LifecycleStateResponse {
+                task_id: record.task_id.clone(),
+                member: record.member.clone(),
+                state: record.state,
+                last_event_id: record.last_event_id.clone(),
+                updated_at_ms: record.updated_at_ms,
+                history_len: record.history_len,
+            })
+    }
+}
+
 #[tauri::command]
 fn pty_create(
     app: AppHandle,
@@ -120,7 +358,10 @@ fn pty_create(
         .master
         .try_clone_reader()
         .map_err(|e| format!("reader clone failed: {e}"))?;
-    let writer = pair.master.take_writer().map_err(|e| format!("writer failed: {e}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("writer failed: {e}"))?;
     let app_handle = app.clone();
 
     let reader_handle = std::thread::spawn(move || {
@@ -217,18 +458,186 @@ fn pty_close(manager: State<'_, PtyManager>, req: PtyCloseRequest) -> Result<(),
     Ok(())
 }
 
+#[tauri::command]
+fn monitoring_ingest_lifecycle_event(
+    manager: State<'_, MonitoringManager>,
+    req: LifecycleIngestRequest,
+) -> Result<LifecycleIngestResponse, String> {
+    let mut state = manager
+        .state
+        .lock()
+        .map_err(|_| "failed to lock monitoring state".to_string())?;
+    Ok(state.ingest(req, now_millis()))
+}
+
+#[tauri::command]
+fn monitoring_get_lifecycle_state(
+    manager: State<'_, MonitoringManager>,
+    req: LifecycleStateQueryRequest,
+) -> Result<Option<LifecycleStateResponse>, String> {
+    let state = manager
+        .state
+        .lock()
+        .map_err(|_| "failed to lock monitoring state".to_string())?;
+    Ok(state.get_state(&req.task_id, &req.member))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(PtyManager::default())
+        .manage(MonitoringManager::default())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             pty_create,
             pty_write,
             pty_resize,
-            pty_close
+            pty_close,
+            monitoring_ingest_lifecycle_event,
+            monitoring_get_lifecycle_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(
+        task_id: &str,
+        member: &str,
+        state: TaskLifecycleState,
+        dedupe_key: &str,
+    ) -> LifecycleIngestRequest {
+        LifecycleIngestRequest {
+            task_id: task_id.to_string(),
+            member: member.to_string(),
+            state,
+            message_id: Some(dedupe_key.to_string()),
+            dedupe_key: Some(dedupe_key.to_string()),
+            source: Some("test".to_string()),
+        }
+    }
+
+    #[test]
+    fn applies_monotonic_transitions() {
+        let mut monitoring = MonitoringState::default();
+        let task_id = "CON-93";
+        let member = "MemberA";
+
+        let sent = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Sent, "event-1"),
+            10,
+        );
+        let ack = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Ack, "event-2"),
+            20,
+        );
+        let in_progress = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::InProgress, "event-3"),
+            30,
+        );
+        let done = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Done, "event-4"),
+            40,
+        );
+
+        assert_eq!(sent.decision, LifecycleDecision::Applied);
+        assert_eq!(ack.decision, LifecycleDecision::Applied);
+        assert_eq!(in_progress.decision, LifecycleDecision::Applied);
+        assert_eq!(done.decision, LifecycleDecision::Applied);
+        assert_eq!(done.current_state, TaskLifecycleState::Done);
+        assert_eq!(
+            monitoring.get_state(task_id, member),
+            Some(LifecycleStateResponse {
+                task_id: task_id.to_string(),
+                member: member.to_string(),
+                state: TaskLifecycleState::Done,
+                last_event_id: Some("event-4".to_string()),
+                updated_at_ms: 40,
+                history_len: 4,
+            })
+        );
+    }
+
+    #[test]
+    fn ignores_stale_or_out_of_order_transition() {
+        let mut monitoring = MonitoringState::default();
+        let task_id = "CON-93";
+        let member = "MemberA";
+
+        let _ = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Sent, "event-1"),
+            10,
+        );
+        let _ = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::InProgress, "event-2"),
+            20,
+        );
+        let stale = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Ack, "event-3"),
+            30,
+        );
+
+        assert_eq!(stale.decision, LifecycleDecision::Stale);
+        let record = monitoring
+            .get_state(task_id, member)
+            .expect("state should exist");
+        assert_eq!(record.state, TaskLifecycleState::InProgress);
+        assert_eq!(record.updated_at_ms, 20);
+        assert_eq!(record.history_len, 3);
+    }
+
+    #[test]
+    fn handles_duplicate_events_idempotently() {
+        let mut monitoring = MonitoringState::default();
+        let task_id = "CON-93";
+        let member = "MemberA";
+
+        let first = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Sent, "event-1"),
+            10,
+        );
+        let duplicate = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Sent, "event-1"),
+            20,
+        );
+
+        assert_eq!(first.decision, LifecycleDecision::Applied);
+        assert_eq!(duplicate.decision, LifecycleDecision::Duplicate);
+        let record = monitoring
+            .get_state(task_id, member)
+            .expect("state should exist");
+        assert_eq!(record.updated_at_ms, 10);
+        assert_eq!(record.history_len, 1);
+    }
+
+    #[test]
+    fn blocks_transition_after_terminal_state() {
+        let mut monitoring = MonitoringState::default();
+        let task_id = "CON-93";
+        let member = "MemberA";
+
+        let _ = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Sent, "event-1"),
+            10,
+        );
+        let _ = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Done, "event-2"),
+            20,
+        );
+        let stale = monitoring.ingest(
+            request(task_id, member, TaskLifecycleState::Failed, "event-3"),
+            30,
+        );
+
+        assert_eq!(stale.decision, LifecycleDecision::Stale);
+        let record = monitoring
+            .get_state(task_id, member)
+            .expect("state should exist");
+        assert_eq!(record.state, TaskLifecycleState::Done);
+        assert_eq!(record.history_len, 3);
+    }
 }
