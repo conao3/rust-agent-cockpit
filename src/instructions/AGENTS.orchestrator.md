@@ -270,3 +270,5 @@ At the end of every batch:
 23. When `Todo`/`In Progress` pools are empty, select next actionable issues from `Backlog` with explicit non-overlapping domains before dispatch.
 24. Dispatch contract must define concrete timing windows (for example ACK <= 10m, heartbeat <= 20m) instead of implicit cadence.
 25. `in_review` handoff is incomplete unless it includes PR URL, head commit SHA, validations run, and changed-file summary.
+26. If branch cleanup/reconstitution changes PR head SHA, require refreshed evidence comment with new SHA and changed-files summary before accepting `In Review`.
+27. When a batch ends with fresh `In Review` issues, prioritize closeout in the next batch before selecting new backlog work.

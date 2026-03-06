@@ -158,6 +158,8 @@ Visibility discipline for each active member:
 - If ready queues are empty, choose from Backlog using domain-separated pairing and announce the rationale in one operator heartbeat line.
 - State explicit ACK/heartbeat deadlines in each dispatch contract (recommended: ACK 10m, heartbeat 20m) and enforce timeout recovery consistently.
 - Reject `in_review` without full evidence bundle: PR URL, commit SHA, validation results, and changed-files summary.
+- If you rewrite/rebase a member branch and PR head SHA changes, require a corrected evidence comment (new SHA + changed files) before accepting handoff.
+- If the current batch produced `In Review` issues, run the next batch as closeout-first for those issues unless user explicitly reprioritizes.
 
 ## Worktree
 

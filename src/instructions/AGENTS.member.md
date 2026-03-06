@@ -112,6 +112,8 @@ Progress visibility requirements:
 - Treat ACK/heartbeat timing from dispatch as strict SLO (default target: ACK <= 10m, heartbeat <= 20m) and report immediately if you will miss it.
 - `in_review` handoff must include changed-files summary in addition to PR URL, commit SHA, and validation evidence.
 - If assigned from Backlog, restate narrowed scope in ACK to reduce ambiguity before first code change.
+- If your branch is rewritten/rebased after contamination cleanup, repost final handoff with updated PR head SHA and final changed-files summary.
+- After reaching `in_review`, stop new feature changes unless Leader explicitly requests follow-up fixes for review/closeout.
 
 ## Worktree
 
