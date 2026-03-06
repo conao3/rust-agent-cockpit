@@ -9,6 +9,7 @@ use std::{
     fs::{self, File},
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
+    process::Command,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
@@ -69,6 +70,21 @@ struct PtySession {
     reader: Option<JoinHandle<()>>,
     task_id: Option<String>,
     member: Option<String>,
+}
+
+#[derive(Clone, Default)]
+struct WorktreeManager {
+    sessions: Arc<Mutex<HashMap<String, WorktreeSession>>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeSession {
+    key: String,
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    deletehook: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -322,6 +338,80 @@ struct PtyCloseRequest {
     id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeCreateRequest {
+    branch: String,
+    basedir: String,
+    hook: Option<String>,
+    deletehook: Option<String>,
+    copyignored: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeOpenRequest {
+    branch: String,
+    basedir: String,
+    hook: Option<String>,
+    deletehook: Option<String>,
+    copyignored: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeCloseRequest {
+    branch: String,
+    basedir: String,
+    delete_on_close: Option<bool>,
+    force: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeDeleteRequest {
+    branch: String,
+    basedir: String,
+    deletehook: Option<String>,
+    force: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeTitleInfoRequest {
+    branch: String,
+    basedir: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeLifecycleResponse {
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    created: bool,
+    exists: bool,
+    opened: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeCloseResponse {
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    removed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeDeleteResponse {
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    removed: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PtyOutputEvent {
@@ -385,6 +475,246 @@ fn make_pty_size(cols: u16, rows: u16) -> PtySize {
 
 fn default_shell() -> String {
     std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string())
+}
+
+fn worktree_slug(branch: &str) -> String {
+    branch
+        .trim()
+        .replace('/', "-")
+        .replace('\\', "-")
+        .replace(' ', "-")
+}
+
+fn validate_worktree_branch(branch: &str) -> Result<String, String> {
+    let trimmed = branch.trim();
+    if trimmed.is_empty() {
+        return Err("branch must not be empty".to_string());
+    }
+    if trimmed == "." || trimmed == ".." {
+        return Err("branch must not be dot path".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
+fn resolve_worktree_dir(basedir: &str, branch: &str) -> Result<PathBuf, String> {
+    let base = basedir.trim();
+    if base.is_empty() {
+        return Err("basedir must not be empty".to_string());
+    }
+    let base_path = PathBuf::from(base);
+    let base_path = if base_path.is_absolute() {
+        base_path
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("resolve current_dir failed: {e}"))?
+            .join(base_path)
+    };
+    Ok(base_path.join(worktree_slug(branch)))
+}
+
+fn git_command(args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {} failed: {e}", args.join(" ")))
+}
+
+fn git_command_in_dir(cwd: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("git")
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {} failed: {e}", args.join(" ")))
+}
+
+fn ensure_git_root() -> Result<PathBuf, String> {
+    let output = git_command(&["rev-parse", "--show-toplevel"])?;
+    if !output.status.success() {
+        return Err(format!(
+            "git rev-parse --show-toplevel failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if root.is_empty() {
+        return Err("git root is empty".to_string());
+    }
+    Ok(PathBuf::from(root))
+}
+
+fn branch_exists(repo_root: &Path, branch: &str) -> Result<bool, String> {
+    let output = git_command_in_dir(
+        repo_root,
+        &["rev-parse", "--verify", &format!("refs/heads/{branch}")],
+    )?;
+    Ok(output.status.success())
+}
+
+fn run_shell_hook(cwd: &Path, hook: &str, label: &str) -> Result<(), String> {
+    let hook = hook.trim();
+    if hook.is_empty() {
+        return Ok(());
+    }
+    let output = Command::new(default_shell())
+        .current_dir(cwd)
+        .arg("-lc")
+        .arg(hook)
+        .output()
+        .map_err(|e| format!("{label} failed to spawn: {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "{label} failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
+}
+
+fn copy_ignored_entries(repo_root: &Path, worktree_dir: &Path) -> Result<(), String> {
+    let output = git_command_in_dir(
+        repo_root,
+        &[
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+        ],
+    )?;
+    if !output.status.success() {
+        return Err(format!(
+            "git ls-files for ignored entries failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| format!("parse ignored entries output failed: {e}"))?;
+    for line in stdout.lines() {
+        let entry = line.trim().trim_end_matches('/');
+        if entry.is_empty() {
+            continue;
+        }
+        let from = repo_root.join(entry);
+        if !from.exists() {
+            continue;
+        }
+        let to = worktree_dir.join(entry);
+        if from.is_dir() {
+            copy_dir_recursive_if_missing(&from, &to)?;
+            continue;
+        }
+        if to.exists() {
+            continue;
+        }
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("create dir failed: {e}"))?;
+        }
+        fs::copy(&from, &to).map_err(|e| {
+            format!(
+                "copy ignored file failed: {} -> {}: {e}",
+                from.display(),
+                to.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn copy_dir_recursive_if_missing(from: &Path, to: &Path) -> Result<(), String> {
+    if !to.exists() {
+        fs::create_dir_all(to).map_err(|e| format!("create dir failed: {e}"))?;
+    }
+    for entry in fs::read_dir(from).map_err(|e| format!("read dir failed: {e}"))? {
+        let entry = entry.map_err(|e| format!("read dir entry failed: {e}"))?;
+        let child_from = entry.path();
+        let child_to = to.join(entry.file_name());
+        if child_from.is_dir() {
+            copy_dir_recursive_if_missing(&child_from, &child_to)?;
+            continue;
+        }
+        if child_to.exists() {
+            continue;
+        }
+        fs::copy(&child_from, &child_to).map_err(|e| {
+            format!(
+                "copy ignored file failed: {} -> {}: {e}",
+                child_from.display(),
+                child_to.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn ensure_worktree_created(
+    repo_root: &Path,
+    branch: &str,
+    basedir: &str,
+    copyignored: bool,
+    hook: Option<&str>,
+) -> Result<(PathBuf, bool), String> {
+    let worktree_dir = resolve_worktree_dir(basedir, branch)?;
+    if worktree_dir.exists() {
+        return Ok((worktree_dir, false));
+    }
+    if let Some(parent) = worktree_dir.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create basedir failed: {e}"))?;
+    }
+
+    let worktree_dir_str = worktree_dir.to_string_lossy().to_string();
+    let output = if branch_exists(repo_root, branch)? {
+        git_command_in_dir(repo_root, &["worktree", "add", &worktree_dir_str, branch])?
+    } else {
+        git_command_in_dir(
+            repo_root,
+            &["worktree", "add", "-b", branch, &worktree_dir_str],
+        )?
+    };
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree add failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    if copyignored {
+        copy_ignored_entries(repo_root, &worktree_dir)?;
+    }
+    if let Some(hook) = hook {
+        run_shell_hook(&worktree_dir, hook, "hook")?;
+    }
+    Ok((worktree_dir, true))
+}
+
+fn remove_worktree(
+    repo_root: &Path,
+    worktree_dir: &Path,
+    deletehook: Option<&str>,
+    force: bool,
+) -> Result<bool, String> {
+    if !worktree_dir.exists() {
+        return Ok(false);
+    }
+    if let Some(hook) = deletehook {
+        run_shell_hook(worktree_dir, hook, "deletehook")?;
+    }
+    let mut args = vec![
+        "worktree".to_string(),
+        "remove".to_string(),
+        worktree_dir.to_string_lossy().to_string(),
+    ];
+    if force {
+        args.push("--force".to_string());
+    }
+    let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = git_command_in_dir(repo_root, &arg_refs)?;
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree remove failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(true)
 }
 
 fn now_millis() -> u64 {
@@ -681,7 +1011,13 @@ fn ensure_claude_worktree_hooks(
         fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))
             .map_err(|e| format!("chmod failed for {}: {e}", script_path.display()))?;
     }
-    upsert_claude_settings(&settings_path, &script_path, &log_file_path, &task_id, &member)?;
+    upsert_claude_settings(
+        &settings_path,
+        &script_path,
+        &log_file_path,
+        &task_id,
+        &member,
+    )?;
 
     Ok(ClaudeWorktreeHooksResponse {
         settings_path: settings_path.to_string_lossy().to_string(),
@@ -784,19 +1120,10 @@ fn normalize_lifecycle_state(value: &str) -> Option<TaskLifecycleState> {
         "ack" | "acknowledged" | "stop" | "waiting" | "human_turn" | "human-turn" => {
             Some(TaskLifecycleState::Ack)
         }
-        "in_progress"
-        | "in-progress"
-        | "running"
-        | "executing"
-        | "pretooluse"
-        | "posttooluse"
-        | "tool_running"
-        | "tool-running" => {
-            Some(TaskLifecycleState::InProgress)
-        }
-        "done" | "completed" | "complete" | "finished" | "success" | "succeeded" | "taskcompleted" => {
-            Some(TaskLifecycleState::Done)
-        }
+        "in_progress" | "in-progress" | "running" | "executing" | "pretooluse" | "posttooluse"
+        | "tool_running" | "tool-running" => Some(TaskLifecycleState::InProgress),
+        "done" | "completed" | "complete" | "finished" | "success" | "succeeded"
+        | "taskcompleted" => Some(TaskLifecycleState::Done),
         "failed" | "error" | "posttoolusefailure" => Some(TaskLifecycleState::Failed),
         _ => None,
     }
@@ -1356,11 +1683,13 @@ impl MonitoringState {
     fn ingest(&mut self, req: LifecycleIngestRequest, now: u64) -> LifecycleIngestResponse {
         let event_key = req.event_key();
         let key = lifecycle_key(&req.task_id, &req.member);
-        self.task_definitions.entry(key.clone()).or_insert_with(|| TaskDefinitionRecord {
-            title: None,
-            dedupe_key: None,
-            auto_registered: true,
-        });
+        self.task_definitions
+            .entry(key.clone())
+            .or_insert_with(|| TaskDefinitionRecord {
+                title: None,
+                dedupe_key: None,
+                auto_registered: true,
+            });
 
         if self.seen_event_keys.contains(&event_key) {
             let fallback_state = req.state;
@@ -1699,6 +2028,153 @@ fn pty_close(manager: State<'_, PtyManager>, req: PtyCloseRequest) -> Result<(),
 }
 
 #[tauri::command]
+fn worktree_create(req: WorktreeCreateRequest) -> Result<WorktreeLifecycleResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let _deletehook = req
+        .deletehook
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned);
+    let (worktree_dir, created) = ensure_worktree_created(
+        &repo_root,
+        &branch,
+        &req.basedir,
+        req.copyignored.unwrap_or(false),
+        req.hook.as_deref(),
+    )?;
+    let title = branch.clone();
+    Ok(WorktreeLifecycleResponse {
+        branch,
+        worktree_dir: worktree_dir.to_string_lossy().to_string(),
+        title,
+        created,
+        exists: worktree_dir.exists(),
+        opened: false,
+    })
+}
+
+#[tauri::command]
+fn worktree_open(
+    manager: State<'_, WorktreeManager>,
+    req: WorktreeOpenRequest,
+) -> Result<WorktreeLifecycleResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let (worktree_dir, created) = ensure_worktree_created(
+        &repo_root,
+        &branch,
+        &req.basedir,
+        req.copyignored.unwrap_or(false),
+        req.hook.as_deref(),
+    )?;
+    let key = worktree_dir.to_string_lossy().to_string();
+    let title = branch.clone();
+    let mut sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "failed to lock worktree sessions".to_string())?;
+    sessions.insert(
+        key.clone(),
+        WorktreeSession {
+            key: key.clone(),
+            branch: branch.clone(),
+            worktree_dir: key.clone(),
+            title: title.clone(),
+            deletehook: req
+                .deletehook
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(ToOwned::to_owned),
+        },
+    );
+    Ok(WorktreeLifecycleResponse {
+        branch,
+        worktree_dir: key,
+        title,
+        created,
+        exists: worktree_dir.exists(),
+        opened: true,
+    })
+}
+
+#[tauri::command]
+fn worktree_close(
+    manager: State<'_, WorktreeManager>,
+    req: WorktreeCloseRequest,
+) -> Result<WorktreeCloseResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let worktree_dir = resolve_worktree_dir(&req.basedir, &branch)?;
+    let key = worktree_dir.to_string_lossy().to_string();
+    let session = {
+        let mut sessions = manager
+            .sessions
+            .lock()
+            .map_err(|_| "failed to lock worktree sessions".to_string())?;
+        sessions.remove(&key)
+    };
+    let title = session
+        .as_ref()
+        .map(|record| record.title.clone())
+        .unwrap_or_else(|| branch.clone());
+    let removed = if req.delete_on_close.unwrap_or(false) {
+        remove_worktree(
+            &repo_root,
+            &worktree_dir,
+            session
+                .as_ref()
+                .and_then(|record| record.deletehook.as_deref()),
+            req.force.unwrap_or(false),
+        )?
+    } else {
+        false
+    };
+    Ok(WorktreeCloseResponse {
+        branch,
+        worktree_dir: key,
+        title,
+        removed,
+    })
+}
+
+#[tauri::command]
+fn worktree_delete(req: WorktreeDeleteRequest) -> Result<WorktreeDeleteResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let worktree_dir = resolve_worktree_dir(&req.basedir, &branch)?;
+    let removed = remove_worktree(
+        &repo_root,
+        &worktree_dir,
+        req.deletehook.as_deref(),
+        req.force.unwrap_or(false),
+    )?;
+    Ok(WorktreeDeleteResponse {
+        branch: branch.clone(),
+        worktree_dir: worktree_dir.to_string_lossy().to_string(),
+        title: branch,
+        removed,
+    })
+}
+
+#[tauri::command]
+fn worktree_title_info(req: WorktreeTitleInfoRequest) -> Result<WorktreeLifecycleResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let worktree_dir = resolve_worktree_dir(&req.basedir, &branch)?;
+    let title = branch.clone();
+    Ok(WorktreeLifecycleResponse {
+        branch,
+        worktree_dir: worktree_dir.to_string_lossy().to_string(),
+        title,
+        created: false,
+        exists: worktree_dir.exists(),
+        opened: false,
+    })
+}
+
+#[tauri::command]
 fn monitoring_ingest_lifecycle_event(
     app: AppHandle,
     manager: State<'_, MonitoringManager>,
@@ -1793,6 +2269,7 @@ pub fn run() {
     let monitoring_manager = MonitoringManager::default();
     tauri::Builder::default()
         .manage(PtyManager::default())
+        .manage(WorktreeManager::default())
         .manage(monitoring_manager)
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -1806,6 +2283,11 @@ pub fn run() {
             pty_write,
             pty_resize,
             pty_close,
+            worktree_create,
+            worktree_open,
+            worktree_close,
+            worktree_delete,
+            worktree_title_info,
             claude_prepare_worktree_hooks,
             monitoring_ingest_lifecycle_event,
             monitoring_get_lifecycle_state,
@@ -1822,7 +2304,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs, fs::File, io::Write};
+    use std::{fs, fs::File, io::Write, process::Command};
 
     fn request(
         task_id: &str,
@@ -2195,14 +2677,84 @@ mod tests {
         }
     }
 
+    fn run_cmd(cwd: &Path, cmd: &str, args: &[&str]) {
+        let output = Command::new(cmd)
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{} {:?} failed: {}",
+            cmd,
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn init_temp_repo(prefix: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("{prefix}-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        run_cmd(&root, "git", &["init"]);
+        run_cmd(&root, "git", &["config", "user.email", "test@example.com"]);
+        run_cmd(&root, "git", &["config", "user.name", "tester"]);
+        fs::write(root.join("README.md"), "seed\n").unwrap();
+        run_cmd(&root, "git", &["add", "README.md"]);
+        run_cmd(&root, "git", &["commit", "-m", "init"]);
+        root
+    }
+
+    #[test]
+    fn worktree_slug_replaces_separators() {
+        assert_eq!(worktree_slug("feature/demo"), "feature-demo");
+        assert_eq!(worktree_slug("feature\\demo"), "feature-demo");
+    }
+
+    #[test]
+    fn worktree_create_and_remove_support_hooks_and_copyignored() {
+        let repo_root = init_temp_repo("con69-worktree");
+        fs::write(repo_root.join(".gitignore"), ".env\n").unwrap();
+        fs::write(repo_root.join(".env"), "TOKEN=abc\n").unwrap();
+        let basedir = repo_root.join(".wt");
+        fs::create_dir_all(&basedir).unwrap();
+
+        let branch = "feature/con-69-test";
+        let hook = "printf created > .hook-created";
+        let (worktree_dir, created) = ensure_worktree_created(
+            &repo_root,
+            branch,
+            basedir.to_str().unwrap(),
+            true,
+            Some(hook),
+        )
+        .unwrap();
+        assert!(created);
+        assert!(worktree_dir.exists());
+        assert_eq!(
+            fs::read_to_string(worktree_dir.join(".env")).unwrap(),
+            "TOKEN=abc\n"
+        );
+        assert!(worktree_dir.join(".hook-created").exists());
+
+        let removed = remove_worktree(
+            &repo_root,
+            &worktree_dir,
+            Some("printf deleted > ../.deletehook-ran"),
+            true,
+        )
+        .unwrap();
+        assert!(removed);
+        assert!(repo_root.join(".wt/.deletehook-ran").exists());
+        assert!(!worktree_dir.exists());
+    }
+
     #[test]
     fn worktree_hooks_write_project_local_settings_only() {
         let root = std::env::temp_dir().join(format!("con76-worktree-{}", now_millis()));
         let worktree = root.join(".wt/con-76");
         fs::create_dir_all(&worktree).unwrap();
 
-        let response =
-            ensure_claude_worktree_hooks(&worktree, "CON-76", "MemberA", &root).unwrap();
+        let response = ensure_claude_worktree_hooks(&worktree, "CON-76", "MemberA", &root).unwrap();
         let settings_path = worktree.join(".claude/settings.json");
         let script_path = worktree.join(".claude/hooks/cockpit-monitor.sh");
 
@@ -2257,9 +2809,11 @@ mod tests {
                 entry
                     .get("hooks")
                     .and_then(|v| v.as_array())
-                    .map(|hooks| hooks.iter().any(|hook| {
-                        hook.get("command").and_then(|v| v.as_str()) == Some("echo keep-me")
-                    }))
+                    .map(|hooks| {
+                        hooks.iter().any(|hook| {
+                            hook.get("command").and_then(|v| v.as_str()) == Some("echo keep-me")
+                        })
+                    })
                     .unwrap_or(false)
             }),
             "existing non-cockpit hook must be preserved"
