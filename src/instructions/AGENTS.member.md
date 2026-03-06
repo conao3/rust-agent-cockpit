@@ -109,6 +109,9 @@ Progress visibility requirements:
 - When CI is still pending after PR creation, report current check states to Leader and wait for review/closeout instruction instead of assuming completion.
 - If Leader requests a rebase/merge from `master` during review, re-run required validation and update the final handoff with refreshed evidence.
 - If merge conflict is resolved on your branch, include a short conflict-resolution note in the handoff so Leader can audit scope safety quickly.
+- Treat ACK/heartbeat timing from dispatch as strict SLO (default target: ACK <= 10m, heartbeat <= 20m) and report immediately if you will miss it.
+- `in_review` handoff must include changed-files summary in addition to PR URL, commit SHA, and validation evidence.
+- If assigned from Backlog, restate narrowed scope in ACK to reduce ambiguity before first code change.
 
 ## Worktree
 

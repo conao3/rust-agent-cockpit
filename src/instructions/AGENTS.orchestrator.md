@@ -267,3 +267,6 @@ At the end of every batch:
 20. For closeout eligibility, if required CI checks are pending, keep issue in `In Review` and re-check before merge instead of forcing close.
 21. During closeout, if PR head needs `master` updates or conflict resolution, require post-update CI re-run to green before merge.
 22. Treat `gh pr review --approve` failure on self-authored PR as expected platform behavior; proceed with manual review notes plus merge decision evidence.
+23. When `Todo`/`In Progress` pools are empty, select next actionable issues from `Backlog` with explicit non-overlapping domains before dispatch.
+24. Dispatch contract must define concrete timing windows (for example ACK <= 10m, heartbeat <= 20m) instead of implicit cadence.
+25. `in_review` handoff is incomplete unless it includes PR URL, head commit SHA, validations run, and changed-file summary.

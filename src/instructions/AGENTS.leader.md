@@ -155,6 +155,9 @@ Visibility discipline for each active member:
 - Do not merge while required checks are pending; continue heartbeat updates and close only after required CI is green.
 - If merge is blocked by base drift/conflict, update branch, resolve conflict, and require fresh green required checks before merge.
 - When reviewer identity equals PR author and GitHub blocks approval, record explicit manual review result in issue/comment and continue with merge gate checks.
+- If ready queues are empty, choose from Backlog using domain-separated pairing and announce the rationale in one operator heartbeat line.
+- State explicit ACK/heartbeat deadlines in each dispatch contract (recommended: ACK 10m, heartbeat 20m) and enforce timeout recovery consistently.
+- Reject `in_review` without full evidence bundle: PR URL, commit SHA, validation results, and changed-files summary.
 
 ## Worktree
 
