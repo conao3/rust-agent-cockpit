@@ -137,6 +137,7 @@ Visibility discipline for each active member:
 
 - Require an early ACK and periodic progress heartbeat (`@Leader:` short status) while task is running.
 - If pane appears idle/stalled, verify process and latest log timestamp first, then instruct targeted resume (do not dual-assign same `task_id`).
+- At batch start, check if selected issue already has an open PR or `In Review` status; if so, run closeout (review/merge/Done/cleanup) and do not dispatch duplicate implementation.
 
 ## Worktree
 

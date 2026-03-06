@@ -248,3 +248,5 @@ At the end of every batch:
 1. Record what failed or caused rework (for example wrong submit key, mixed commits in PR, dependency mismatch).
 2. Update `AGENTS.orchestrator.md`, `AGENTS.leader.md`, and `AGENTS.member.md` with concrete rule changes.
 3. Apply updates before starting the next batch.
+4. Before dispatching a "next batch", check whether candidate tasks are already `In Review` or have open PRs.
+5. If already active, switch to closeout flow (review/merge/Done/cleanup) instead of re-dispatching implementation.
