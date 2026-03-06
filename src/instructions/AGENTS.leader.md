@@ -144,6 +144,7 @@ Visibility discipline for each active member:
 - Enforce startup-read silence strictly: no `cat/sed` dump of memory files to visible logs; require redirect to `/dev/null`.
 - If ACK is not received within the required window, re-dispatch via visible member pane execution (not comment-only) and record timeout recovery action.
 - In dispatch/recovery prompts, explicitly constrain search paths so members do not scan `src/instructions/*` during implementation work.
+- For recovery re-runs, assign unique run labels (`<task>-retryN`) so logs/evidence are separable per attempt.
 
 ## Worktree
 

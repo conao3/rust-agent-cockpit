@@ -256,3 +256,4 @@ At the end of every batch:
 9. Treat startup-read log dumps as protocol violation: startup reads must be silent (`>/dev/null`) and must not print memory contents.
 10. Linear comment dispatch alone is not sufficient: if no ACK is observed within timeout, orchestrator must inject execution prompt to the assigned member tmux pane and re-check.
 11. During member recovery runs, require scope-limited file search (target directories only) and avoid broad `rg src` that scans `src/instructions/*`.
+12. On retry/resume, use a unique run identifier in `task_id` (for example `<task>-retryN`) to avoid mixed JSONL logs across attempts.
