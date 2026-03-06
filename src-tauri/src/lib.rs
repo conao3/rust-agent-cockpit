@@ -271,6 +271,32 @@ fn validate_monitoring_identity(task_id: &str, member: &str) -> Result<(), Strin
     Ok(())
 }
 
+fn is_valid_registered_transition(from: Option<TaskLifecycleState>, to: TaskLifecycleState) -> bool {
+    match from {
+        None => matches!(to, TaskLifecycleState::Sent | TaskLifecycleState::Failed),
+        Some(TaskLifecycleState::Sent) => {
+            matches!(
+                to,
+                TaskLifecycleState::Sent | TaskLifecycleState::Ack | TaskLifecycleState::Failed
+            )
+        }
+        Some(TaskLifecycleState::Ack) => {
+            matches!(
+                to,
+                TaskLifecycleState::Ack | TaskLifecycleState::InProgress | TaskLifecycleState::Failed
+            )
+        }
+        Some(TaskLifecycleState::InProgress) => {
+            matches!(
+                to,
+                TaskLifecycleState::InProgress | TaskLifecycleState::Done | TaskLifecycleState::Failed
+            )
+        }
+        Some(TaskLifecycleState::Done) => matches!(to, TaskLifecycleState::Done),
+        Some(TaskLifecycleState::Failed) => matches!(to, TaskLifecycleState::Failed),
+    }
+}
+
 #[cfg(not(test))]
 fn log_monitoring_event(value: serde_json::Value) {
     eprintln!("[monitoring] {}", value);
@@ -333,10 +359,23 @@ impl MonitoringState {
             )
         })?;
 
+        let current_state = self.task_states.get(&key).map(|record| record.state);
+        if !is_valid_registered_transition(current_state, req.state) {
+            return Err(format!(
+                "invalid lifecycle transition for task_id={} member={} to {:?}",
+                task_id, member, req.state
+            ));
+        }
+
         let dedupe_key = req
             .dedupe_key
             .clone()
-            .or_else(|| definition.dedupe_key.clone());
+            .or_else(|| {
+                definition
+                    .dedupe_key
+                    .as_ref()
+                    .map(|base| format!("{base}:{:?}:{now}", req.state))
+            });
         let message_id = req.message_id.clone().or_else(|| dedupe_key.clone());
         let response = self.ingest(
             LifecycleIngestRequest {
