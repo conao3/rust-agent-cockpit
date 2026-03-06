@@ -2,6 +2,8 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
 use std::fs::{create_dir_all, OpenOptions};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File},
@@ -15,6 +17,38 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State};
+
+const COCKPIT_HOOK_SCRIPT_RELATIVE_PATH: &str = ".claude/hooks/cockpit-monitor.sh";
+const COCKPIT_CLAUDE_SETTINGS_RELATIVE_PATH: &str = ".claude/settings.json";
+const COCKPIT_HOOK_SOURCE: &str = "claude_hook";
+
+struct ClaudeHookSpec {
+    event_name: &'static str,
+    state: &'static str,
+}
+
+const CLAUDE_HOOK_SPECS: [ClaudeHookSpec; 5] = [
+    ClaudeHookSpec {
+        event_name: "Stop",
+        state: "human_turn",
+    },
+    ClaudeHookSpec {
+        event_name: "PreToolUse",
+        state: "tool_running",
+    },
+    ClaudeHookSpec {
+        event_name: "PostToolUse",
+        state: "tool_running",
+    },
+    ClaudeHookSpec {
+        event_name: "TaskCompleted",
+        state: "done",
+    },
+    ClaudeHookSpec {
+        event_name: "PostToolUseFailure",
+        state: "failed",
+    },
+];
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -237,12 +271,30 @@ struct PtyCreateRequest {
     command: Option<String>,
     args: Option<Vec<String>>,
     cwd: Option<String>,
+    task_id: Option<String>,
+    member: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PtyCreateResponse {
     id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudeWorktreeHooksRequest {
+    worktree_dir: String,
+    task_id: String,
+    member: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ClaudeWorktreeHooksResponse {
+    settings_path: String,
+    hook_script_path: String,
+    log_file_path: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -305,6 +357,204 @@ fn validate_monitoring_identity(task_id: &str, member: &str) -> Result<(), Strin
         return Err("member must not be empty".to_string());
     }
     Ok(())
+}
+
+fn validate_monitoring_token(value: &str, field: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(format!("{field} must not be empty"));
+    }
+    if trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.')
+    {
+        return Ok(trimmed.to_string());
+    }
+    Err(format!(
+        "{field} must contain only [A-Za-z0-9._-] for hook-safe command generation"
+    ))
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn monitor_script_path(worktree_dir: &Path) -> PathBuf {
+    worktree_dir.join(COCKPIT_HOOK_SCRIPT_RELATIVE_PATH)
+}
+
+fn claude_settings_path(worktree_dir: &Path) -> PathBuf {
+    worktree_dir.join(COCKPIT_CLAUDE_SETTINGS_RELATIVE_PATH)
+}
+
+fn claude_log_file_path(cockpit_root: &Path, task_id: &str) -> PathBuf {
+    cockpit_root
+        .join("logs")
+        .join("codex")
+        .join(task_id)
+        .join("claude-hooks.jsonl")
+}
+
+fn claude_hook_script_body() -> String {
+    format!(
+        r#"#!/bin/sh
+set -eu
+if [ "$#" -lt 5 ]; then
+  exit 1
+fi
+log_file="$1"
+task_id="$2"
+member="$3"
+state="$4"
+hook_event="$5"
+mkdir -p "$(dirname "$log_file")"
+if [ ! -t 0 ]; then
+  cat >/dev/null || true
+fi
+timestamp="$(date +%s 2>/dev/null || printf '0')"
+printf '{{"source":"{}","task_id":"%s","member":"%s","state":"%s","hook_event":"%s","timestamp":%s}}\n' \
+  "$task_id" "$member" "$state" "$hook_event" "$timestamp" >> "$log_file"
+"#,
+        COCKPIT_HOOK_SOURCE
+    )
+}
+
+fn write_file_if_changed(path: &Path, body: &[u8]) -> Result<(), String> {
+    if let Ok(current) = fs::read(path) {
+        if current == body {
+            return Ok(());
+        }
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create parent failed: {e}"))?;
+    }
+    fs::write(path, body).map_err(|e| format!("write failed for {}: {e}", path.display()))
+}
+
+fn command_for_hook(
+    script_path: &Path,
+    log_file_path: &Path,
+    task_id: &str,
+    member: &str,
+    spec: &ClaudeHookSpec,
+) -> String {
+    format!(
+        "{} {} {} {} {}",
+        shell_quote(script_path.to_string_lossy().as_ref()),
+        shell_quote(log_file_path.to_string_lossy().as_ref()),
+        shell_quote(task_id),
+        shell_quote(member),
+        shell_quote(spec.state),
+    ) + &format!(" {}", shell_quote(spec.event_name))
+}
+
+fn is_cockpit_hook_entry(value: &serde_json::Value) -> bool {
+    value
+        .get("hooks")
+        .and_then(|raw| raw.as_array())
+        .map(|hooks| {
+            hooks.iter().any(|hook| {
+                let hook_type = hook.get("type").and_then(|v| v.as_str());
+                let command = hook.get("command").and_then(|v| v.as_str());
+                hook_type == Some("command")
+                    && command
+                        .map(|cmd| cmd.contains(COCKPIT_HOOK_SCRIPT_RELATIVE_PATH))
+                        .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn upsert_claude_settings(
+    settings_path: &Path,
+    script_path: &Path,
+    log_file_path: &Path,
+    task_id: &str,
+    member: &str,
+) -> Result<(), String> {
+    let existing = if settings_path.exists() {
+        let bytes = fs::read(settings_path)
+            .map_err(|e| format!("read settings failed for {}: {e}", settings_path.display()))?;
+        serde_json::from_slice::<serde_json::Value>(&bytes)
+            .map_err(|e| format!("parse settings failed for {}: {e}", settings_path.display()))?
+    } else {
+        serde_json::json!({})
+    };
+
+    let root = existing
+        .as_object()
+        .cloned()
+        .ok_or_else(|| format!("{} must be a JSON object", settings_path.display()))?;
+    let mut root = serde_json::Map::from_iter(root);
+    let hooks = root
+        .entry("hooks".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let hooks_obj = hooks
+        .as_object_mut()
+        .ok_or_else(|| format!("{} hooks must be an object", settings_path.display()))?;
+
+    for spec in CLAUDE_HOOK_SPECS {
+        let entry = hooks_obj
+            .entry(spec.event_name.to_string())
+            .or_insert_with(|| serde_json::json!([]));
+        let events = entry.as_array_mut().ok_or_else(|| {
+            format!(
+                "{} hooks.{} must be an array",
+                settings_path.display(),
+                spec.event_name
+            )
+        })?;
+        events.retain(|item| !is_cockpit_hook_entry(item));
+        events.push(serde_json::json!({
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": command_for_hook(script_path, log_file_path, task_id, member, &spec),
+                }
+            ]
+        }));
+    }
+
+    let body = serde_json::to_vec_pretty(&serde_json::Value::Object(root))
+        .map_err(|e| format!("serialize settings failed: {e}"))?;
+    let mut body_with_newline = body;
+    body_with_newline.push(b'\n');
+    write_file_if_changed(settings_path, &body_with_newline)
+}
+
+fn ensure_claude_worktree_hooks(
+    worktree_dir: &Path,
+    task_id: &str,
+    member: &str,
+    cockpit_root: &Path,
+) -> Result<ClaudeWorktreeHooksResponse, String> {
+    validate_monitoring_identity(task_id, member)?;
+    let task_id = validate_monitoring_token(task_id, "task_id")?;
+    let member = validate_monitoring_token(member, "member")?;
+    if !worktree_dir.exists() || !worktree_dir.is_dir() {
+        return Err(format!(
+            "worktree_dir must be an existing directory: {}",
+            worktree_dir.display()
+        ));
+    }
+
+    let script_path = monitor_script_path(worktree_dir);
+    let settings_path = claude_settings_path(worktree_dir);
+    let log_file_path = claude_log_file_path(cockpit_root, &task_id);
+
+    write_file_if_changed(&script_path, claude_hook_script_body().as_bytes())?;
+    #[cfg(unix)]
+    {
+        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("chmod failed for {}: {e}", script_path.display()))?;
+    }
+    upsert_claude_settings(&settings_path, &script_path, &log_file_path, &task_id, &member)?;
+
+    Ok(ClaudeWorktreeHooksResponse {
+        settings_path: settings_path.to_string_lossy().to_string(),
+        hook_script_path: script_path.to_string_lossy().to_string(),
+        log_file_path: log_file_path.to_string_lossy().to_string(),
+    })
 }
 
 fn is_valid_registered_transition(
@@ -381,14 +631,23 @@ fn monitoring_member_fallback() -> String {
 fn normalize_lifecycle_state(value: &str) -> Option<TaskLifecycleState> {
     match value.trim().to_ascii_lowercase().as_str() {
         "sent" | "queued" => Some(TaskLifecycleState::Sent),
-        "ack" | "acknowledged" | "stop" | "waiting" => Some(TaskLifecycleState::Ack),
-        "in_progress" | "in-progress" | "running" | "executing" | "pretooluse" | "posttooluse" => {
+        "ack" | "acknowledged" | "stop" | "waiting" | "human_turn" | "human-turn" => {
+            Some(TaskLifecycleState::Ack)
+        }
+        "in_progress"
+        | "in-progress"
+        | "running"
+        | "executing"
+        | "pretooluse"
+        | "posttooluse"
+        | "tool_running"
+        | "tool-running" => {
             Some(TaskLifecycleState::InProgress)
         }
-        "done" | "completed" | "complete" | "finished" | "success" | "succeeded" => {
+        "done" | "completed" | "complete" | "finished" | "success" | "succeeded" | "taskcompleted" => {
             Some(TaskLifecycleState::Done)
         }
-        "failed" | "error" => Some(TaskLifecycleState::Failed),
+        "failed" | "error" | "posttoolusefailure" => Some(TaskLifecycleState::Failed),
         _ => None,
     }
 }
@@ -471,6 +730,11 @@ fn extract_member(value: &serde_json::Value) -> String {
 }
 
 fn extract_state(value: &serde_json::Value) -> Option<TaskLifecycleState> {
+    if let Some(raw) = json_string(value, &["hook_event_name", "hookEventName"]) {
+        if let Some(state) = normalize_lifecycle_state(&raw) {
+            return Some(state);
+        }
+    }
     for key in [
         "state",
         "lifecycle_state",
@@ -981,11 +1245,46 @@ impl MonitoringState {
 }
 
 #[tauri::command]
+fn claude_prepare_worktree_hooks(
+    req: ClaudeWorktreeHooksRequest,
+) -> Result<ClaudeWorktreeHooksResponse, String> {
+    let worktree_dir = PathBuf::from(req.worktree_dir.trim());
+    let worktree_dir = if worktree_dir.is_absolute() {
+        worktree_dir
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("resolve current_dir failed: {e}"))?
+            .join(worktree_dir)
+    };
+    let cockpit_root =
+        std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
+    ensure_claude_worktree_hooks(&worktree_dir, &req.task_id, &req.member, &cockpit_root)
+}
+
+#[tauri::command]
 fn pty_create(
     app: AppHandle,
     manager: State<'_, PtyManager>,
     req: PtyCreateRequest,
 ) -> Result<PtyCreateResponse, String> {
+    if let (Some(cwd), Some(task_id), Some(member)) = (
+        req.cwd.as_deref(),
+        req.task_id.as_deref(),
+        req.member.as_deref(),
+    ) {
+        let worktree_dir = Path::new(cwd);
+        let worktree_dir = if worktree_dir.is_absolute() {
+            worktree_dir.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .map_err(|e| format!("resolve current_dir failed: {e}"))?
+                .join(worktree_dir)
+        };
+        let cockpit_root =
+            std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
+        ensure_claude_worktree_hooks(&worktree_dir, task_id, member, &cockpit_root)?;
+    }
+
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(make_pty_size(req.cols, req.rows))
@@ -1195,6 +1494,7 @@ pub fn run() {
             pty_write,
             pty_resize,
             pty_close,
+            claude_prepare_worktree_hooks,
             monitoring_ingest_lifecycle_event,
             monitoring_get_lifecycle_state,
             task_register_definition,
@@ -1526,7 +1826,6 @@ mod tests {
         collect_codex_log_files(&root, &mut files);
         assert!(files.iter().any(|p| p == &file));
     }
-
     #[test]
     fn monitoring_event_auto_registers_task_definition() {
         let mut monitoring = MonitoringState::default();
@@ -1548,5 +1847,112 @@ mod tests {
         assert_eq!(snapshot.history_len, 1);
         assert_eq!(snapshot.title, None);
         assert_eq!(snapshot.dedupe_key, None);
+    }
+
+    #[test]
+    fn runner_event_parses_claude_hook_states() {
+        let path = Path::new("/tmp/logs/codex/CON-76/20260307-000001.jsonl");
+        let cases = [
+            (
+                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"Stop","id":"evt-human"}"#,
+                TaskLifecycleState::Ack,
+            ),
+            (
+                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"PreToolUse","id":"evt-tool"}"#,
+                TaskLifecycleState::InProgress,
+            ),
+            (
+                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"TaskCompleted","id":"evt-done"}"#,
+                TaskLifecycleState::Done,
+            ),
+            (
+                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"PostToolUseFailure","id":"evt-fail"}"#,
+                TaskLifecycleState::Failed,
+            ),
+        ];
+
+        for (line, expected) in cases {
+            let event = build_runner_event(path, 18, line)
+                .expect("parse should succeed")
+                .expect("event should be produced");
+            assert_eq!(event.request.task_id, "CON-76");
+            assert_eq!(event.request.member, "MemberA");
+            assert_eq!(event.request.state, expected);
+        }
+    }
+
+    #[test]
+    fn worktree_hooks_write_project_local_settings_only() {
+        let root = std::env::temp_dir().join(format!("con76-worktree-{}", now_millis()));
+        let worktree = root.join(".wt/con-76");
+        fs::create_dir_all(&worktree).unwrap();
+
+        let response =
+            ensure_claude_worktree_hooks(&worktree, "CON-76", "MemberA", &root).unwrap();
+        let settings_path = worktree.join(".claude/settings.json");
+        let script_path = worktree.join(".claude/hooks/cockpit-monitor.sh");
+
+        assert_eq!(response.settings_path, settings_path.to_string_lossy());
+        assert_eq!(response.hook_script_path, script_path.to_string_lossy());
+        assert!(settings_path.exists());
+        assert!(script_path.exists());
+        assert_eq!(
+            response.log_file_path,
+            root.join("logs/codex/CON-76/claude-hooks.jsonl")
+                .to_string_lossy()
+        );
+        assert!(!root.join(".claude/settings.json").exists());
+    }
+
+    #[test]
+    fn worktree_hooks_preserve_existing_non_cockpit_hooks() {
+        let root = std::env::temp_dir().join(format!("con76-settings-{}", now_millis()));
+        let worktree = root.join(".wt/con-76-existing");
+        fs::create_dir_all(worktree.join(".claude")).unwrap();
+        let settings_path = worktree.join(".claude/settings.json");
+        fs::write(
+            &settings_path,
+            r#"{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo keep-me"
+          }
+        ]
+      }
+    ]
+  }
+}"#,
+        )
+        .unwrap();
+
+        ensure_claude_worktree_hooks(&worktree, "CON-76", "MemberA", &root).unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&fs::read(&settings_path).unwrap()).unwrap();
+
+        let stop_hooks = parsed
+            .get("hooks")
+            .and_then(|v| v.get("Stop"))
+            .and_then(|v| v.as_array())
+            .unwrap();
+        assert!(
+            stop_hooks.iter().any(|entry| {
+                entry
+                    .get("hooks")
+                    .and_then(|v| v.as_array())
+                    .map(|hooks| hooks.iter().any(|hook| {
+                        hook.get("command").and_then(|v| v.as_str()) == Some("echo keep-me")
+                    }))
+                    .unwrap_or(false)
+            }),
+            "existing non-cockpit hook must be preserved"
+        );
+        assert!(
+            stop_hooks.iter().any(is_cockpit_hook_entry),
+            "cockpit hook must be present"
+        );
     }
 }
