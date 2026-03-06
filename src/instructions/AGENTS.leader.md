@@ -133,6 +133,11 @@ This keeps member runs autonomous and auditable.
 
 At the end of every batch, Leader updates agent instruction files with lessons learned before launching the next batch.
 
+Visibility discipline for each active member:
+
+- Require an early ACK and periodic progress heartbeat (`@Leader:` short status) while task is running.
+- If pane appears idle/stalled, verify process and latest log timestamp first, then instruct targeted resume (do not dual-assign same `task_id`).
+
 ## Worktree
 
 All work must be done in a dedicated git worktree. When delegating a task to a member, instruct them to use the following worktree path:

@@ -202,6 +202,8 @@ Note:
 - For operator-facing runs, execute Leader/Member jobs inside `agent-cockpit-team` panes so progress is visible in real time.
 - Do not rely on background-only execution when user expects live visibility.
 - Before starting a new run for the same `task_id`, terminate stale duplicate processes and keep exactly one active run.
+- While a run is active, require periodic heartbeat output in pane/log (for example every 60-120s). If no heartbeat appears, mark run `stalled` and trigger resume/restart policy.
+- When user reports "no movement", first verify pane process liveness and latest log timestamp, then re-dispatch in the same pane (not detached/background).
 
 These defaults prevent duplicate execution better than permissive routing.
 
@@ -238,6 +240,8 @@ Main-branch sync safety:
 - If autostash creates conflicts, keep stash entry and report explicit recovery instruction to Leader.
 
 ## Batch Retrospective Update (mandatory)
+
+At the end of every batch, append concrete operational learnings to `AGENTS.orchestrator.md`, `AGENTS.leader.md`, and `AGENTS.member.md` before launching the next batch.
 
 At the end of every batch:
 

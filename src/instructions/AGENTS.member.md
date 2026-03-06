@@ -88,6 +88,11 @@ If blocked by dependency on another task, report explicitly:
 
 At batch end, include concise implementation lessons in your completion report so Leader can update instruction files.
 
+Progress visibility requirements:
+
+- After start ACK, post short heartbeat updates at reasonable intervals while long-running validation/build is in progress.
+- If your process exits unexpectedly, immediately report `@Leader: <task-id> failed_needs_resume ...` with last completed step.
+
 ## Worktree
 
 All work must be done in the git worktree specified by the Leader. The path follows this format:
