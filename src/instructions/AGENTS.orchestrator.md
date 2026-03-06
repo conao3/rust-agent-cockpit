@@ -41,13 +41,21 @@ Every routed instruction should carry:
 
 1. Parse recipient strictly from prefix.
 2. Resolve exactly one target pane unless `@AllMembers:` is used.
-3. Send text and Enter separately in tmux:
+3. Send text and submit key separately in tmux:
    - `send-keys "<text>"`
-   - `send-keys C-m`
+   - `send-keys <submit-key>`
 4. Wait for ACK from the target member:
    - `@Leader: ACK <message_id>`
 5. If no ACK within timeout, retry only to the same target.
 6. Max retry count; then mark failed and notify Leader.
+
+## Submit Key Mapping (important)
+
+In Codex TUI panes, submission is triggered by `Ctrl+S` in this environment.
+
+- Use `tmux send-keys ... C-s` to submit.
+- `Enter` / `C-m` / `C-j` were observed to insert newline (not submit) in Codex TUI.
+- In plain shell panes (`zsh`), `Enter` and `C-m` work as normal newline execution.
 
 ## De-duplication Rules
 
