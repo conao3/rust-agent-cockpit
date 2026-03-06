@@ -9,6 +9,7 @@ use std::{
     fs::{self, File},
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
+    process::Command,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
@@ -59,6 +60,7 @@ fn greet(name: &str) -> String {
 struct PtyManager {
     next_id: AtomicU64,
     sessions: Mutex<HashMap<String, PtySession>>,
+    routes: Mutex<HashMap<String, String>>,
 }
 
 struct PtySession {
@@ -66,6 +68,23 @@ struct PtySession {
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
     reader: Option<JoinHandle<()>>,
+    task_id: Option<String>,
+    member: Option<String>,
+}
+
+#[derive(Clone, Default)]
+struct WorktreeManager {
+    sessions: Arc<Mutex<HashMap<String, WorktreeSession>>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeSession {
+    key: String,
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    deletehook: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -79,6 +98,7 @@ struct MonitoringState {
     task_states: HashMap<String, TaskLifecycleRecord>,
     task_definitions: HashMap<String, TaskDefinitionRecord>,
     seen_event_keys: HashSet<String>,
+    seen_linear_event_keys: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -318,11 +338,130 @@ struct PtyCloseRequest {
     id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeCreateRequest {
+    branch: String,
+    basedir: String,
+    hook: Option<String>,
+    deletehook: Option<String>,
+    copyignored: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeOpenRequest {
+    branch: String,
+    basedir: String,
+    hook: Option<String>,
+    deletehook: Option<String>,
+    copyignored: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeCloseRequest {
+    branch: String,
+    basedir: String,
+    delete_on_close: Option<bool>,
+    force: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeDeleteRequest {
+    branch: String,
+    basedir: String,
+    deletehook: Option<String>,
+    force: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeTitleInfoRequest {
+    branch: String,
+    basedir: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeLifecycleResponse {
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    created: bool,
+    exists: bool,
+    opened: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeCloseResponse {
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    removed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeDeleteResponse {
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    removed: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PtyOutputEvent {
     id: String,
     data: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LinearCommentEnvelope {
+    issue_id: String,
+    comment_id: Option<String>,
+    body: String,
+    target_member: Option<String>,
+    source: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LinearPollIngestRequest {
+    comments: Vec<LinearCommentEnvelope>,
+}
+
+#[derive(Debug, Clone)]
+struct NormalizedLinearMessage {
+    issue_id: String,
+    target_member: String,
+    body: String,
+    source: String,
+    event_key: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum LinearMessageDecision {
+    Delivered,
+    Duplicate,
+    Unroutable,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LinearMessageIngestResponse {
+    decision: LinearMessageDecision,
+    issue_id: String,
+    target_member: String,
+    normalized_body: String,
+    source: String,
+    pty_id: Option<String>,
+    event_key: String,
 }
 
 fn make_pty_size(cols: u16, rows: u16) -> PtySize {
@@ -338,6 +477,246 @@ fn default_shell() -> String {
     std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string())
 }
 
+fn worktree_slug(branch: &str) -> String {
+    branch
+        .trim()
+        .replace('/', "-")
+        .replace('\\', "-")
+        .replace(' ', "-")
+}
+
+fn validate_worktree_branch(branch: &str) -> Result<String, String> {
+    let trimmed = branch.trim();
+    if trimmed.is_empty() {
+        return Err("branch must not be empty".to_string());
+    }
+    if trimmed == "." || trimmed == ".." {
+        return Err("branch must not be dot path".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
+fn resolve_worktree_dir(basedir: &str, branch: &str) -> Result<PathBuf, String> {
+    let base = basedir.trim();
+    if base.is_empty() {
+        return Err("basedir must not be empty".to_string());
+    }
+    let base_path = PathBuf::from(base);
+    let base_path = if base_path.is_absolute() {
+        base_path
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("resolve current_dir failed: {e}"))?
+            .join(base_path)
+    };
+    Ok(base_path.join(worktree_slug(branch)))
+}
+
+fn git_command(args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {} failed: {e}", args.join(" ")))
+}
+
+fn git_command_in_dir(cwd: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("git")
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {} failed: {e}", args.join(" ")))
+}
+
+fn ensure_git_root() -> Result<PathBuf, String> {
+    let output = git_command(&["rev-parse", "--show-toplevel"])?;
+    if !output.status.success() {
+        return Err(format!(
+            "git rev-parse --show-toplevel failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if root.is_empty() {
+        return Err("git root is empty".to_string());
+    }
+    Ok(PathBuf::from(root))
+}
+
+fn branch_exists(repo_root: &Path, branch: &str) -> Result<bool, String> {
+    let output = git_command_in_dir(
+        repo_root,
+        &["rev-parse", "--verify", &format!("refs/heads/{branch}")],
+    )?;
+    Ok(output.status.success())
+}
+
+fn run_shell_hook(cwd: &Path, hook: &str, label: &str) -> Result<(), String> {
+    let hook = hook.trim();
+    if hook.is_empty() {
+        return Ok(());
+    }
+    let output = Command::new(default_shell())
+        .current_dir(cwd)
+        .arg("-lc")
+        .arg(hook)
+        .output()
+        .map_err(|e| format!("{label} failed to spawn: {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "{label} failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
+}
+
+fn copy_ignored_entries(repo_root: &Path, worktree_dir: &Path) -> Result<(), String> {
+    let output = git_command_in_dir(
+        repo_root,
+        &[
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+        ],
+    )?;
+    if !output.status.success() {
+        return Err(format!(
+            "git ls-files for ignored entries failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| format!("parse ignored entries output failed: {e}"))?;
+    for line in stdout.lines() {
+        let entry = line.trim().trim_end_matches('/');
+        if entry.is_empty() {
+            continue;
+        }
+        let from = repo_root.join(entry);
+        if !from.exists() {
+            continue;
+        }
+        let to = worktree_dir.join(entry);
+        if from.is_dir() {
+            copy_dir_recursive_if_missing(&from, &to)?;
+            continue;
+        }
+        if to.exists() {
+            continue;
+        }
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("create dir failed: {e}"))?;
+        }
+        fs::copy(&from, &to).map_err(|e| {
+            format!(
+                "copy ignored file failed: {} -> {}: {e}",
+                from.display(),
+                to.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn copy_dir_recursive_if_missing(from: &Path, to: &Path) -> Result<(), String> {
+    if !to.exists() {
+        fs::create_dir_all(to).map_err(|e| format!("create dir failed: {e}"))?;
+    }
+    for entry in fs::read_dir(from).map_err(|e| format!("read dir failed: {e}"))? {
+        let entry = entry.map_err(|e| format!("read dir entry failed: {e}"))?;
+        let child_from = entry.path();
+        let child_to = to.join(entry.file_name());
+        if child_from.is_dir() {
+            copy_dir_recursive_if_missing(&child_from, &child_to)?;
+            continue;
+        }
+        if child_to.exists() {
+            continue;
+        }
+        fs::copy(&child_from, &child_to).map_err(|e| {
+            format!(
+                "copy ignored file failed: {} -> {}: {e}",
+                child_from.display(),
+                child_to.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn ensure_worktree_created(
+    repo_root: &Path,
+    branch: &str,
+    basedir: &str,
+    copyignored: bool,
+    hook: Option<&str>,
+) -> Result<(PathBuf, bool), String> {
+    let worktree_dir = resolve_worktree_dir(basedir, branch)?;
+    if worktree_dir.exists() {
+        return Ok((worktree_dir, false));
+    }
+    if let Some(parent) = worktree_dir.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create basedir failed: {e}"))?;
+    }
+
+    let worktree_dir_str = worktree_dir.to_string_lossy().to_string();
+    let output = if branch_exists(repo_root, branch)? {
+        git_command_in_dir(repo_root, &["worktree", "add", &worktree_dir_str, branch])?
+    } else {
+        git_command_in_dir(
+            repo_root,
+            &["worktree", "add", "-b", branch, &worktree_dir_str],
+        )?
+    };
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree add failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    if copyignored {
+        copy_ignored_entries(repo_root, &worktree_dir)?;
+    }
+    if let Some(hook) = hook {
+        run_shell_hook(&worktree_dir, hook, "hook")?;
+    }
+    Ok((worktree_dir, true))
+}
+
+fn remove_worktree(
+    repo_root: &Path,
+    worktree_dir: &Path,
+    deletehook: Option<&str>,
+    force: bool,
+) -> Result<bool, String> {
+    if !worktree_dir.exists() {
+        return Ok(false);
+    }
+    if let Some(hook) = deletehook {
+        run_shell_hook(worktree_dir, hook, "deletehook")?;
+    }
+    let mut args = vec![
+        "worktree".to_string(),
+        "remove".to_string(),
+        worktree_dir.to_string_lossy().to_string(),
+    ];
+    if force {
+        args.push("--force".to_string());
+    }
+    let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = git_command_in_dir(repo_root, &arg_refs)?;
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree remove failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(true)
+}
+
 fn now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -349,6 +728,10 @@ fn lifecycle_key(task_id: &str, member: &str) -> String {
     format!("{}::{}", task_id.trim(), member.trim())
 }
 
+fn linear_route_key(issue_id: &str, member: &str) -> String {
+    lifecycle_key(issue_id, member)
+}
+
 fn validate_monitoring_identity(task_id: &str, member: &str) -> Result<(), String> {
     if task_id.trim().is_empty() {
         return Err("task_id must not be empty".to_string());
@@ -357,6 +740,86 @@ fn validate_monitoring_identity(task_id: &str, member: &str) -> Result<(), Strin
         return Err("member must not be empty".to_string());
     }
     Ok(())
+}
+
+fn first_mentioned_member(body: &str) -> Option<String> {
+    for token in body.split_whitespace() {
+        let candidate = token.trim().trim_matches(|ch: char| {
+            matches!(
+                ch,
+                ':' | ',' | '.' | ';' | '!' | '?' | '(' | ')' | '[' | ']' | '{' | '}'
+            )
+        });
+        if let Some(stripped) = candidate.strip_prefix('@') {
+            let member = stripped.trim();
+            if !member.is_empty() {
+                return Some(member.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn normalize_linear_body(body: &str, member: &str) -> String {
+    let trimmed = body.trim();
+    let direct_prefix = format!("@{member}");
+    if let Some(rest) = trimmed.strip_prefix(&direct_prefix) {
+        return rest.trim_start_matches([':', '-', ' ']).trim().to_string();
+    }
+    trimmed.to_string()
+}
+
+fn normalize_linear_comment(
+    comment: LinearCommentEnvelope,
+    fallback_source: &str,
+) -> Result<NormalizedLinearMessage, String> {
+    let issue_id = comment.issue_id.trim().to_string();
+    if issue_id.is_empty() {
+        return Err("issue_id must not be empty".to_string());
+    }
+    if comment.body.trim().is_empty() {
+        return Err("body must not be empty".to_string());
+    }
+
+    let target_member = comment
+        .target_member
+        .as_deref()
+        .and_then(|v| {
+            let trimmed = v.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .or_else(|| first_mentioned_member(&comment.body))
+        .ok_or_else(|| "target_member could not be resolved from comment".to_string())?;
+    let source = comment
+        .source
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or(fallback_source)
+        .to_string();
+    let event_key = comment
+        .comment_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|id| format!("linear:{}:{id}", issue_id))
+        .unwrap_or_else(|| {
+            let compact_body = comment.body.trim().replace('\n', "\\n");
+            format!("linear:{}:{}:{}", issue_id, target_member, compact_body)
+        });
+    let body = normalize_linear_body(&comment.body, &target_member);
+
+    Ok(NormalizedLinearMessage {
+        issue_id,
+        target_member,
+        body,
+        source,
+        event_key,
+    })
 }
 
 fn validate_monitoring_token(value: &str, field: &str) -> Result<String, String> {
@@ -548,7 +1011,13 @@ fn ensure_claude_worktree_hooks(
         fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))
             .map_err(|e| format!("chmod failed for {}: {e}", script_path.display()))?;
     }
-    upsert_claude_settings(&settings_path, &script_path, &log_file_path, &task_id, &member)?;
+    upsert_claude_settings(
+        &settings_path,
+        &script_path,
+        &log_file_path,
+        &task_id,
+        &member,
+    )?;
 
     Ok(ClaudeWorktreeHooksResponse {
         settings_path: settings_path.to_string_lossy().to_string(),
@@ -624,6 +1093,23 @@ fn log_monitoring_runner_event(value: serde_json::Value) {
 #[cfg(test)]
 fn log_monitoring_runner_event(_value: serde_json::Value) {}
 
+#[cfg(not(test))]
+fn log_linear_message_event(value: serde_json::Value) {
+    eprintln!("[linear-messaging] {}", value);
+    let path = Path::new("logs/monitoring/linear-messaging.jsonl");
+    if let Some(parent) = path.parent() {
+        if create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{value}");
+    }
+}
+
+#[cfg(test)]
+fn log_linear_message_event(_value: serde_json::Value) {}
+
 fn monitoring_member_fallback() -> String {
     std::env::var("COCKPIT_MONITORING_MEMBER").unwrap_or_else(|_| "MemberA".to_string())
 }
@@ -634,19 +1120,10 @@ fn normalize_lifecycle_state(value: &str) -> Option<TaskLifecycleState> {
         "ack" | "acknowledged" | "stop" | "waiting" | "human_turn" | "human-turn" => {
             Some(TaskLifecycleState::Ack)
         }
-        "in_progress"
-        | "in-progress"
-        | "running"
-        | "executing"
-        | "pretooluse"
-        | "posttooluse"
-        | "tool_running"
-        | "tool-running" => {
-            Some(TaskLifecycleState::InProgress)
-        }
-        "done" | "completed" | "complete" | "finished" | "success" | "succeeded" | "taskcompleted" => {
-            Some(TaskLifecycleState::Done)
-        }
+        "in_progress" | "in-progress" | "running" | "executing" | "pretooluse" | "posttooluse"
+        | "tool_running" | "tool-running" => Some(TaskLifecycleState::InProgress),
+        "done" | "completed" | "complete" | "finished" | "success" | "succeeded"
+        | "taskcompleted" => Some(TaskLifecycleState::Done),
         "failed" | "error" | "posttoolusefailure" => Some(TaskLifecycleState::Failed),
         _ => None,
     }
@@ -874,6 +1351,67 @@ fn monitoring_offsets_file(cwd: &Path) -> PathBuf {
     std::env::var("COCKPIT_MONITORING_OFFSETS_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|_| cwd.join("logs/monitoring/runner-offsets.json"))
+}
+
+impl PtyManager {
+    fn register_linear_route(&self, pty_id: &str, issue_id: &str, member: &str) -> Result<(), String> {
+        validate_monitoring_identity(issue_id, member)?;
+        let route_key = linear_route_key(issue_id, member);
+        let mut routes = self
+            .routes
+            .lock()
+            .map_err(|_| "failed to lock pty routes".to_string())?;
+        routes.insert(route_key, pty_id.to_string());
+        Ok(())
+    }
+
+    fn remove_linear_route(&self, issue_id: &str, member: &str, pty_id: &str) -> Result<(), String> {
+        let route_key = linear_route_key(issue_id, member);
+        let mut routes = self
+            .routes
+            .lock()
+            .map_err(|_| "failed to lock pty routes".to_string())?;
+        if routes.get(&route_key).is_some_and(|registered| registered == pty_id) {
+            routes.remove(&route_key);
+        }
+        Ok(())
+    }
+
+    fn route_linear_message(&self, msg: &NormalizedLinearMessage) -> Result<Option<String>, String> {
+        let route_key = linear_route_key(&msg.issue_id, &msg.target_member);
+        let pty_id = {
+            let routes = self
+                .routes
+                .lock()
+                .map_err(|_| "failed to lock pty routes".to_string())?;
+            routes.get(&route_key).cloned()
+        };
+        let Some(pty_id) = pty_id else {
+            return Ok(None);
+        };
+
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| "failed to lock sessions".to_string())?;
+        let session = sessions
+            .get_mut(&pty_id)
+            .ok_or_else(|| format!("pty not found for route: {}", route_key))?;
+        session
+            .writer
+            .write_all(msg.body.as_bytes())
+            .map_err(|e| format!("linear route write failed: {e}"))?;
+        session
+            .writer
+            .write_all(b"\n")
+            .map_err(|e| format!("linear route write newline failed: {e}"))?;
+        session
+            .writer
+            .flush()
+            .map_err(|e| format!("linear route flush failed: {e}"))?;
+
+        Ok(Some(pty_id))
+    }
 }
 
 impl MonitoringManager {
@@ -1145,11 +1683,13 @@ impl MonitoringState {
     fn ingest(&mut self, req: LifecycleIngestRequest, now: u64) -> LifecycleIngestResponse {
         let event_key = req.event_key();
         let key = lifecycle_key(&req.task_id, &req.member);
-        self.task_definitions.entry(key.clone()).or_insert_with(|| TaskDefinitionRecord {
-            title: None,
-            dedupe_key: None,
-            auto_registered: true,
-        });
+        self.task_definitions
+            .entry(key.clone())
+            .or_insert_with(|| TaskDefinitionRecord {
+                title: None,
+                dedupe_key: None,
+                auto_registered: true,
+            });
 
         if self.seen_event_keys.contains(&event_key) {
             let fallback_state = req.state;
@@ -1242,6 +1782,71 @@ impl MonitoringState {
                 history_len: record.history_len,
             })
     }
+}
+
+fn ingest_linear_comment(
+    monitoring_manager: &MonitoringManager,
+    pty_manager: &PtyManager,
+    comment: LinearCommentEnvelope,
+    fallback_source: &str,
+) -> Result<LinearMessageIngestResponse, String> {
+    let message = normalize_linear_comment(comment, fallback_source)?;
+
+    {
+        let mut state = monitoring_manager
+            .state
+            .lock()
+            .map_err(|_| "failed to lock monitoring state".to_string())?;
+        if state.seen_linear_event_keys.contains(&message.event_key) {
+            let response = LinearMessageIngestResponse {
+                decision: LinearMessageDecision::Duplicate,
+                issue_id: message.issue_id.clone(),
+                target_member: message.target_member.clone(),
+                normalized_body: message.body.clone(),
+                source: message.source.clone(),
+                pty_id: None,
+                event_key: message.event_key.clone(),
+            };
+            log_linear_message_event(serde_json::json!({
+                "event": "linear_comment_ingest",
+                "decision": response.decision,
+                "issue_id": response.issue_id,
+                "target_member": response.target_member,
+                "source": response.source,
+                "event_key": response.event_key,
+                "reason": "duplicate",
+            }));
+            return Ok(response);
+        }
+        state.seen_linear_event_keys.insert(message.event_key.clone());
+    }
+
+    let routed_pty_id = pty_manager.route_linear_message(&message)?;
+    let decision = if routed_pty_id.is_some() {
+        LinearMessageDecision::Delivered
+    } else {
+        LinearMessageDecision::Unroutable
+    };
+
+    let response = LinearMessageIngestResponse {
+        decision,
+        issue_id: message.issue_id.clone(),
+        target_member: message.target_member.clone(),
+        normalized_body: message.body.clone(),
+        source: message.source.clone(),
+        pty_id: routed_pty_id.clone(),
+        event_key: message.event_key.clone(),
+    };
+    log_linear_message_event(serde_json::json!({
+        "event": "linear_comment_ingest",
+        "decision": response.decision,
+        "issue_id": response.issue_id,
+        "target_member": response.target_member,
+        "source": response.source,
+        "pty_id": response.pty_id,
+        "event_key": response.event_key,
+    }));
+    Ok(response)
 }
 
 #[tauri::command]
@@ -1344,6 +1949,8 @@ fn pty_create(
         writer,
         child,
         reader: Some(reader_handle),
+        task_id: req.task_id.clone(),
+        member: req.member.clone(),
     };
 
     let mut sessions = manager
@@ -1351,6 +1958,10 @@ fn pty_create(
         .lock()
         .map_err(|_| "failed to lock sessions".to_string())?;
     sessions.insert(id.clone(), session);
+    drop(sessions);
+    if let (Some(task_id), Some(member)) = (req.task_id.as_deref(), req.member.as_deref()) {
+        manager.register_linear_route(&id, task_id, member)?;
+    }
 
     Ok(PtyCreateResponse { id })
 }
@@ -1410,7 +2021,157 @@ fn pty_close(manager: State<'_, PtyManager>, req: PtyCloseRequest) -> Result<(),
     if let Some(handle) = session.reader.take() {
         let _ = handle.join();
     }
+    if let (Some(task_id), Some(member)) = (session.task_id.as_deref(), session.member.as_deref()) {
+        manager.remove_linear_route(task_id, member, &req.id)?;
+    }
     Ok(())
+}
+
+#[tauri::command]
+fn worktree_create(req: WorktreeCreateRequest) -> Result<WorktreeLifecycleResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let _deletehook = req
+        .deletehook
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned);
+    let (worktree_dir, created) = ensure_worktree_created(
+        &repo_root,
+        &branch,
+        &req.basedir,
+        req.copyignored.unwrap_or(false),
+        req.hook.as_deref(),
+    )?;
+    let title = branch.clone();
+    Ok(WorktreeLifecycleResponse {
+        branch,
+        worktree_dir: worktree_dir.to_string_lossy().to_string(),
+        title,
+        created,
+        exists: worktree_dir.exists(),
+        opened: false,
+    })
+}
+
+#[tauri::command]
+fn worktree_open(
+    manager: State<'_, WorktreeManager>,
+    req: WorktreeOpenRequest,
+) -> Result<WorktreeLifecycleResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let (worktree_dir, created) = ensure_worktree_created(
+        &repo_root,
+        &branch,
+        &req.basedir,
+        req.copyignored.unwrap_or(false),
+        req.hook.as_deref(),
+    )?;
+    let key = worktree_dir.to_string_lossy().to_string();
+    let title = branch.clone();
+    let mut sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "failed to lock worktree sessions".to_string())?;
+    sessions.insert(
+        key.clone(),
+        WorktreeSession {
+            key: key.clone(),
+            branch: branch.clone(),
+            worktree_dir: key.clone(),
+            title: title.clone(),
+            deletehook: req
+                .deletehook
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(ToOwned::to_owned),
+        },
+    );
+    Ok(WorktreeLifecycleResponse {
+        branch,
+        worktree_dir: key,
+        title,
+        created,
+        exists: worktree_dir.exists(),
+        opened: true,
+    })
+}
+
+#[tauri::command]
+fn worktree_close(
+    manager: State<'_, WorktreeManager>,
+    req: WorktreeCloseRequest,
+) -> Result<WorktreeCloseResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let worktree_dir = resolve_worktree_dir(&req.basedir, &branch)?;
+    let key = worktree_dir.to_string_lossy().to_string();
+    let session = {
+        let mut sessions = manager
+            .sessions
+            .lock()
+            .map_err(|_| "failed to lock worktree sessions".to_string())?;
+        sessions.remove(&key)
+    };
+    let title = session
+        .as_ref()
+        .map(|record| record.title.clone())
+        .unwrap_or_else(|| branch.clone());
+    let removed = if req.delete_on_close.unwrap_or(false) {
+        remove_worktree(
+            &repo_root,
+            &worktree_dir,
+            session
+                .as_ref()
+                .and_then(|record| record.deletehook.as_deref()),
+            req.force.unwrap_or(false),
+        )?
+    } else {
+        false
+    };
+    Ok(WorktreeCloseResponse {
+        branch,
+        worktree_dir: key,
+        title,
+        removed,
+    })
+}
+
+#[tauri::command]
+fn worktree_delete(req: WorktreeDeleteRequest) -> Result<WorktreeDeleteResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let repo_root = ensure_git_root()?;
+    let worktree_dir = resolve_worktree_dir(&req.basedir, &branch)?;
+    let removed = remove_worktree(
+        &repo_root,
+        &worktree_dir,
+        req.deletehook.as_deref(),
+        req.force.unwrap_or(false),
+    )?;
+    Ok(WorktreeDeleteResponse {
+        branch: branch.clone(),
+        worktree_dir: worktree_dir.to_string_lossy().to_string(),
+        title: branch,
+        removed,
+    })
+}
+
+#[tauri::command]
+fn worktree_title_info(req: WorktreeTitleInfoRequest) -> Result<WorktreeLifecycleResponse, String> {
+    let branch = validate_worktree_branch(&req.branch)?;
+    let worktree_dir = resolve_worktree_dir(&req.basedir, &branch)?;
+    let title = branch.clone();
+    Ok(WorktreeLifecycleResponse {
+        branch,
+        worktree_dir: worktree_dir.to_string_lossy().to_string(),
+        title,
+        created: false,
+        exists: worktree_dir.exists(),
+        opened: false,
+    })
 }
 
 #[tauri::command]
@@ -1476,11 +2237,39 @@ fn task_get_lifecycle(
     state.get_registered_lifecycle(req)
 }
 
+#[tauri::command]
+fn linear_ingest_webhook_comment(
+    monitoring_manager: State<'_, MonitoringManager>,
+    pty_manager: State<'_, PtyManager>,
+    req: LinearCommentEnvelope,
+) -> Result<LinearMessageIngestResponse, String> {
+    ingest_linear_comment(&monitoring_manager, &pty_manager, req, "webhook")
+}
+
+#[tauri::command]
+fn linear_ingest_poll_comments(
+    monitoring_manager: State<'_, MonitoringManager>,
+    pty_manager: State<'_, PtyManager>,
+    req: LinearPollIngestRequest,
+) -> Result<Vec<LinearMessageIngestResponse>, String> {
+    let mut responses = Vec::with_capacity(req.comments.len());
+    for comment in req.comments {
+        responses.push(ingest_linear_comment(
+            &monitoring_manager,
+            &pty_manager,
+            comment,
+            "polling",
+        )?);
+    }
+    Ok(responses)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let monitoring_manager = MonitoringManager::default();
     tauri::Builder::default()
         .manage(PtyManager::default())
+        .manage(WorktreeManager::default())
         .manage(monitoring_manager)
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -1494,12 +2283,19 @@ pub fn run() {
             pty_write,
             pty_resize,
             pty_close,
+            worktree_create,
+            worktree_open,
+            worktree_close,
+            worktree_delete,
+            worktree_title_info,
             claude_prepare_worktree_hooks,
             monitoring_ingest_lifecycle_event,
             monitoring_get_lifecycle_state,
             task_register_definition,
             task_transition_lifecycle,
-            task_get_lifecycle
+            task_get_lifecycle,
+            linear_ingest_webhook_comment,
+            linear_ingest_poll_comments
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1508,7 +2304,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs, fs::File, io::Write};
+    use std::{fs, fs::File, io::Write, process::Command};
 
     fn request(
         task_id: &str,
@@ -1881,14 +2677,84 @@ mod tests {
         }
     }
 
+    fn run_cmd(cwd: &Path, cmd: &str, args: &[&str]) {
+        let output = Command::new(cmd)
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{} {:?} failed: {}",
+            cmd,
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn init_temp_repo(prefix: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("{prefix}-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        run_cmd(&root, "git", &["init"]);
+        run_cmd(&root, "git", &["config", "user.email", "test@example.com"]);
+        run_cmd(&root, "git", &["config", "user.name", "tester"]);
+        fs::write(root.join("README.md"), "seed\n").unwrap();
+        run_cmd(&root, "git", &["add", "README.md"]);
+        run_cmd(&root, "git", &["commit", "-m", "init"]);
+        root
+    }
+
+    #[test]
+    fn worktree_slug_replaces_separators() {
+        assert_eq!(worktree_slug("feature/demo"), "feature-demo");
+        assert_eq!(worktree_slug("feature\\demo"), "feature-demo");
+    }
+
+    #[test]
+    fn worktree_create_and_remove_support_hooks_and_copyignored() {
+        let repo_root = init_temp_repo("con69-worktree");
+        fs::write(repo_root.join(".gitignore"), ".env\n").unwrap();
+        fs::write(repo_root.join(".env"), "TOKEN=abc\n").unwrap();
+        let basedir = repo_root.join(".wt");
+        fs::create_dir_all(&basedir).unwrap();
+
+        let branch = "feature/con-69-test";
+        let hook = "printf created > .hook-created";
+        let (worktree_dir, created) = ensure_worktree_created(
+            &repo_root,
+            branch,
+            basedir.to_str().unwrap(),
+            true,
+            Some(hook),
+        )
+        .unwrap();
+        assert!(created);
+        assert!(worktree_dir.exists());
+        assert_eq!(
+            fs::read_to_string(worktree_dir.join(".env")).unwrap(),
+            "TOKEN=abc\n"
+        );
+        assert!(worktree_dir.join(".hook-created").exists());
+
+        let removed = remove_worktree(
+            &repo_root,
+            &worktree_dir,
+            Some("printf deleted > ../.deletehook-ran"),
+            true,
+        )
+        .unwrap();
+        assert!(removed);
+        assert!(repo_root.join(".wt/.deletehook-ran").exists());
+        assert!(!worktree_dir.exists());
+    }
+
     #[test]
     fn worktree_hooks_write_project_local_settings_only() {
         let root = std::env::temp_dir().join(format!("con76-worktree-{}", now_millis()));
         let worktree = root.join(".wt/con-76");
         fs::create_dir_all(&worktree).unwrap();
 
-        let response =
-            ensure_claude_worktree_hooks(&worktree, "CON-76", "MemberA", &root).unwrap();
+        let response = ensure_claude_worktree_hooks(&worktree, "CON-76", "MemberA", &root).unwrap();
         let settings_path = worktree.join(".claude/settings.json");
         let script_path = worktree.join(".claude/hooks/cockpit-monitor.sh");
 
@@ -1943,9 +2809,11 @@ mod tests {
                 entry
                     .get("hooks")
                     .and_then(|v| v.as_array())
-                    .map(|hooks| hooks.iter().any(|hook| {
-                        hook.get("command").and_then(|v| v.as_str()) == Some("echo keep-me")
-                    }))
+                    .map(|hooks| {
+                        hooks.iter().any(|hook| {
+                            hook.get("command").and_then(|v| v.as_str()) == Some("echo keep-me")
+                        })
+                    })
                     .unwrap_or(false)
             }),
             "existing non-cockpit hook must be preserved"
@@ -1954,5 +2822,59 @@ mod tests {
             stop_hooks.iter().any(is_cockpit_hook_entry),
             "cockpit hook must be present"
         );
+    }
+
+    #[test]
+    fn linear_normalization_uses_target_member_or_mention() {
+        let explicit = normalize_linear_comment(
+            LinearCommentEnvelope {
+                issue_id: "CON-75".to_string(),
+                comment_id: Some("cmt-1".to_string()),
+                body: "@MemberB: please check logs".to_string(),
+                target_member: Some("MemberB".to_string()),
+                source: None,
+            },
+            "webhook",
+        )
+        .expect("explicit target should normalize");
+        assert_eq!(explicit.issue_id, "CON-75");
+        assert_eq!(explicit.target_member, "MemberB");
+        assert_eq!(explicit.body, "please check logs");
+        assert_eq!(explicit.source, "webhook");
+        assert_eq!(explicit.event_key, "linear:CON-75:cmt-1");
+
+        let by_mention = normalize_linear_comment(
+            LinearCommentEnvelope {
+                issue_id: "CON-75".to_string(),
+                comment_id: None,
+                body: "@MemberA run validation".to_string(),
+                target_member: None,
+                source: Some("polling".to_string()),
+            },
+            "webhook",
+        )
+        .expect("mention target should normalize");
+        assert_eq!(by_mention.target_member, "MemberA");
+        assert_eq!(by_mention.source, "polling");
+        assert_eq!(by_mention.body, "run validation");
+    }
+
+    #[test]
+    fn linear_ingest_is_deduped_and_marks_unroutable_without_route() {
+        let monitoring = MonitoringManager::default();
+        let pty = PtyManager::default();
+        let comment = LinearCommentEnvelope {
+            issue_id: "CON-75".to_string(),
+            comment_id: Some("cmt-2".to_string()),
+            body: "@MemberB status?".to_string(),
+            target_member: None,
+            source: None,
+        };
+
+        let first = ingest_linear_comment(&monitoring, &pty, comment.clone(), "webhook").unwrap();
+        let second = ingest_linear_comment(&monitoring, &pty, comment, "polling").unwrap();
+        assert_eq!(first.decision, LinearMessageDecision::Unroutable);
+        assert_eq!(second.decision, LinearMessageDecision::Duplicate);
+        assert_eq!(first.event_key, second.event_key);
     }
 }
