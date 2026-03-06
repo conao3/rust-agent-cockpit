@@ -108,6 +108,20 @@ Log each routing decision:
 
 Use logs to audit accidental fan-out quickly.
 
+For Codex execution visibility, prefer non-interactive CLI with JSON event logs:
+
+```bash
+./scripts/codex_exec_visible.sh <task-id> "<prompt>"
+```
+
+This prints events to stdout and also saves them under:
+
+```text
+logs/codex/<task-id>/<timestamp>.jsonl
+```
+
+Use this path for user-facing traceability instead of tmux keystroke-only operation.
+
 ## Safe Defaults
 
 - No implicit broadcast.
