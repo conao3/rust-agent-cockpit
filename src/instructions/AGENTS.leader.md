@@ -63,6 +63,7 @@ Before merge, Leader must verify at least:
 - changed files are expected
 - issue linkage is present in PR body (example: `Closes CON-85`)
 - validation command result is included and reasonable (for Tauri compile issues, `cd src-tauri && cargo check`)
+- required CI check `required-frontend-check / frontend-build` is green before merge
 
 After merge:
 
