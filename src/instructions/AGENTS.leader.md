@@ -148,6 +148,8 @@ Visibility discipline for each active member:
 - Treat closeout as done only after: merged PR, Linear Done update, worktree deletion, and local `master` sync confirmation.
 - Keep transient runtime logs (for example `src-tauri/logs/`) out of member PRs unless the task explicitly targets logging artifacts.
 - When starting a new batch, announce task-to-member mapping (`memberA=<issue>`, `memberB=<issue>`) before first dispatch so overlap is visible to operator.
+- In visible-pane execution, sanitize the prompt line before launch (`Ctrl-C`, then one fresh command) to avoid mixed input from prior typing.
+- Consider the batch "started" only after confirming `task_id/log/thread.started` in leader pane output; otherwise relaunch cleanly.
 
 ## Worktree
 

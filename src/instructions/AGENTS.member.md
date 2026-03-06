@@ -102,6 +102,8 @@ Progress visibility requirements:
 - If your issue is already in closeout phase, stop implementation and report closeout-only status (merged/Done/cleanup) instead of creating new commits.
 - Do not commit runtime artifact directories (for example `src-tauri/logs/`) unless Leader explicitly scopes that path.
 - In ACK and final handoff, always repeat exact `task_id` provided by Leader to avoid cross-batch log ambiguity.
+- If Leader restarts or re-injects a command after pane/input recovery, ACK again with the same `task_id` so run evidence remains contiguous.
+- Treat "dispatch sent" as non-start state; begin coding only after explicit task injection and then emit `@Leader: ACK <task-id> start`.
 
 ## Worktree
 

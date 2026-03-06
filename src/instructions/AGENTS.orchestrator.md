@@ -260,3 +260,5 @@ At the end of every batch:
 13. Closeout is complete only after all four checks pass: PR merged, Linear moved to Done, worktree removed, and local `master` synced without destructive reset.
 14. Treat runtime artifacts under `src-tauri/logs/` as non-deliverables; never include them in implementation PRs unless explicitly requested.
 15. Before launching the next batch, orchestrator must announce the selected issue IDs and assigned pane/member mapping in one explicit dispatch line.
+16. Before sending any run command to tmux, reset pane input state first (`C-c` then fresh command) to prevent accidental command concatenation.
+17. After run launch, verify startup evidence (`task_id:` and `log:` lines, then `thread.started`) before declaring batch started.
