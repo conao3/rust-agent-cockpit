@@ -1,18 +1,20 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
-use std::{fs::{create_dir_all, OpenOptions}, path::Path};
+use std::fs::{create_dir_all, OpenOptions};
 use std::{
     collections::{HashMap, HashSet},
-    io::{Read, Write},
+    fs::{self, File},
+    io::{Read, Seek, SeekFrom, Write},
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
-    thread::JoinHandle,
-    time::{SystemTime, UNIX_EPOCH},
+    thread::{self, JoinHandle},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -32,9 +34,10 @@ struct PtySession {
     reader: Option<JoinHandle<()>>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct MonitoringManager {
-    state: Mutex<MonitoringState>,
+    state: Arc<Mutex<MonitoringState>>,
+    runner_started: Arc<Mutex<bool>>,
 }
 
 #[derive(Default)]
@@ -93,7 +96,7 @@ enum LifecycleDecision {
     Stale,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LifecycleIngestRequest {
     task_id: String,
@@ -193,6 +196,38 @@ struct TaskLifecycleSnapshot {
     history_len: usize,
 }
 
+#[derive(Default)]
+struct MonitoringRunnerCursor {
+    offsets: HashMap<String, u64>,
+    pending: HashMap<String, Vec<u8>>,
+}
+
+#[derive(Debug, Clone)]
+struct MonitoringRunnerEvent {
+    request: LifecycleIngestRequest,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct MonitoringRunnerOffsets {
+    files: HashMap<String, u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexEventEnvelope {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(default)]
+    item: Option<CodexEventItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexEventItem {
+    #[serde(rename = "type")]
+    item_type: String,
+    #[serde(default)]
+    text: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PtyCreateRequest {
@@ -271,7 +306,10 @@ fn validate_monitoring_identity(task_id: &str, member: &str) -> Result<(), Strin
     Ok(())
 }
 
-fn is_valid_registered_transition(from: Option<TaskLifecycleState>, to: TaskLifecycleState) -> bool {
+fn is_valid_registered_transition(
+    from: Option<TaskLifecycleState>,
+    to: TaskLifecycleState,
+) -> bool {
     match from {
         None => matches!(to, TaskLifecycleState::Sent | TaskLifecycleState::Failed),
         Some(TaskLifecycleState::Sent) => {
@@ -283,13 +321,17 @@ fn is_valid_registered_transition(from: Option<TaskLifecycleState>, to: TaskLife
         Some(TaskLifecycleState::Ack) => {
             matches!(
                 to,
-                TaskLifecycleState::Ack | TaskLifecycleState::InProgress | TaskLifecycleState::Failed
+                TaskLifecycleState::Ack
+                    | TaskLifecycleState::InProgress
+                    | TaskLifecycleState::Failed
             )
         }
         Some(TaskLifecycleState::InProgress) => {
             matches!(
                 to,
-                TaskLifecycleState::InProgress | TaskLifecycleState::Done | TaskLifecycleState::Failed
+                TaskLifecycleState::InProgress
+                    | TaskLifecycleState::Done
+                    | TaskLifecycleState::Failed
             )
         }
         Some(TaskLifecycleState::Done) => matches!(to, TaskLifecycleState::Done),
@@ -313,6 +355,406 @@ fn log_monitoring_event(value: serde_json::Value) {
 
 #[cfg(test)]
 fn log_monitoring_event(_value: serde_json::Value) {}
+
+#[cfg(not(test))]
+fn log_monitoring_runner_event(value: serde_json::Value) {
+    eprintln!("[monitoring-runner] {}", value);
+    let path = Path::new("logs/monitoring/runner.jsonl");
+    if let Some(parent) = path.parent() {
+        if create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{value}");
+    }
+}
+
+#[cfg(test)]
+fn log_monitoring_runner_event(_value: serde_json::Value) {}
+
+fn monitoring_member_fallback() -> String {
+    std::env::var("COCKPIT_MONITORING_MEMBER").unwrap_or_else(|_| "MemberA".to_string())
+}
+
+fn normalize_lifecycle_state(value: &str) -> Option<TaskLifecycleState> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "sent" | "queued" => Some(TaskLifecycleState::Sent),
+        "ack" | "acknowledged" | "stop" | "waiting" => Some(TaskLifecycleState::Ack),
+        "in_progress" | "in-progress" | "running" | "executing" | "pretooluse" | "posttooluse" => {
+            Some(TaskLifecycleState::InProgress)
+        }
+        "done" | "completed" | "complete" | "finished" | "success" | "succeeded" => {
+            Some(TaskLifecycleState::Done)
+        }
+        "failed" | "error" => Some(TaskLifecycleState::Failed),
+        _ => None,
+    }
+}
+
+fn parse_state_from_leader_report(body: &str) -> Option<TaskLifecycleState> {
+    let normalized = body.to_ascii_lowercase();
+    if normalized.contains(" in_review")
+        || normalized.starts_with("in_review")
+        || normalized.contains(" in_progress")
+        || normalized.contains(" in progress")
+        || normalized.starts_with("in_progress")
+        || normalized.starts_with("in progress")
+    {
+        return Some(TaskLifecycleState::InProgress);
+    }
+    if normalized.contains(" done") || normalized.starts_with("done") {
+        return Some(TaskLifecycleState::Done);
+    }
+    if normalized.contains(" blocked")
+        || normalized.contains(" failed")
+        || normalized.contains(" fail")
+        || normalized.starts_with("failed")
+    {
+        return Some(TaskLifecycleState::Failed);
+    }
+    if normalized.contains(" ack") || normalized.starts_with("ack ") {
+        return Some(TaskLifecycleState::Ack);
+    }
+    None
+}
+
+fn parse_task_id_from_leader_report(body: &str) -> Option<String> {
+    let mut parts = body.split_whitespace();
+    let raw = parts.next()?;
+    let task_id = raw
+        .trim_matches(|c: char| matches!(c, ',' | '.' | ':' | ';' | '(' | ')' | '[' | ']'))
+        .to_ascii_uppercase();
+    if task_id.starts_with("CON-") {
+        return Some(task_id);
+    }
+    None
+}
+
+fn json_string(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    for key in keys {
+        if let Some(raw) = value.get(*key) {
+            if let Some(s) = raw.as_str() {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn extract_task_id(path: &Path, value: &serde_json::Value) -> Option<String> {
+    if let Some(task_id) = json_string(value, &["task_id", "taskId", "issue_id", "issueId"]) {
+        return Some(task_id);
+    }
+
+    let mut components = path.components().peekable();
+    while let Some(component) = components.next() {
+        if component.as_os_str() == "codex" {
+            if let Some(task_id) = components.next() {
+                let task_id = task_id.as_os_str().to_string_lossy().trim().to_string();
+                if !task_id.is_empty() {
+                    return Some(task_id);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn extract_member(value: &serde_json::Value) -> String {
+    json_string(value, &["member", "agent", "delegate", "assignee", "owner"])
+        .unwrap_or_else(monitoring_member_fallback)
+}
+
+fn extract_state(value: &serde_json::Value) -> Option<TaskLifecycleState> {
+    for key in [
+        "state",
+        "lifecycle_state",
+        "lifecycleState",
+        "status",
+        "hook_event",
+        "hookEvent",
+        "event",
+        "type",
+    ] {
+        if let Some(raw) = value.get(key).and_then(|v| v.as_str()) {
+            if let Some(state) = normalize_lifecycle_state(raw) {
+                return Some(state);
+            }
+        }
+    }
+    None
+}
+
+fn build_runner_event(
+    path: &Path,
+    offset: u64,
+    line: &str,
+) -> Result<Option<MonitoringRunnerEvent>, String> {
+    let payload: serde_json::Value = serde_json::from_str(line).map_err(|e| format!("{e}"))?;
+    if let Ok(envelope) = serde_json::from_value::<CodexEventEnvelope>(payload.clone()) {
+        if envelope.event_type == "item.completed" {
+            if let Some(item) = envelope.item {
+                if item.item_type == "agent_message" {
+                    if let Some(text) = item.text {
+                        if let Some(body) = text.trim().strip_prefix("@Leader:") {
+                            let body = body.trim();
+                            if let (Some(task_id), Some(state)) = (
+                                parse_task_id_from_leader_report(body),
+                                parse_state_from_leader_report(body),
+                            ) {
+                                let member = monitoring_member_fallback();
+                                let dedupe_key =
+                                    Some(format!("{}:{offset}", path.to_string_lossy()));
+                                return Ok(Some(MonitoringRunnerEvent {
+                                    request: LifecycleIngestRequest {
+                                        task_id,
+                                        member,
+                                        state,
+                                        message_id: Some(dedupe_key.clone().unwrap_or_default()),
+                                        dedupe_key,
+                                        source: Some("backend_runner".to_string()),
+                                    },
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let state = match extract_state(&payload) {
+        Some(state) => state,
+        None => return Ok(None),
+    };
+    let task_id = match extract_task_id(path, &payload) {
+        Some(task_id) => task_id,
+        None => return Ok(None),
+    };
+    let member = extract_member(&payload);
+    let source = json_string(&payload, &["source"]).unwrap_or_else(|| "backend_runner".to_string());
+    let message_id = json_string(&payload, &["id", "event_id", "message_id", "messageId"]);
+    let dedupe_key = Some(format!("{}:{offset}", path.to_string_lossy()));
+
+    Ok(Some(MonitoringRunnerEvent {
+        request: LifecycleIngestRequest {
+            task_id,
+            member,
+            state,
+            message_id,
+            dedupe_key,
+            source: Some(source),
+        },
+    }))
+}
+
+fn collect_codex_log_files(root: &Path, out: &mut Vec<PathBuf>) {
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_codex_log_files(&path, out);
+            continue;
+        }
+        if !path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("jsonl"))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        out.push(path);
+    }
+}
+
+fn read_runner_offsets(path: &Path) -> MonitoringRunnerOffsets {
+    if let Ok(bytes) = fs::read(path) {
+        if let Ok(offsets) = serde_json::from_slice::<MonitoringRunnerOffsets>(&bytes) {
+            return offsets;
+        }
+    }
+    MonitoringRunnerOffsets::default()
+}
+
+fn write_runner_offsets(path: &Path, offsets: &MonitoringRunnerOffsets) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("create runner offset parent failed: {e}"))?;
+    }
+    let body = serde_json::to_vec_pretty(offsets)
+        .map_err(|e| format!("serialize runner offsets failed: {e}"))?;
+    fs::write(path, body).map_err(|e| format!("write runner offsets failed: {e}"))
+}
+
+fn retry_delay_ms(attempt: u32) -> u64 {
+    let capped = attempt.min(6);
+    500 * (1_u64 << capped)
+}
+
+fn monitoring_input_dir(cwd: &Path) -> PathBuf {
+    std::env::var("COCKPIT_MONITORING_INPUT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| cwd.join("logs/codex"))
+}
+
+fn monitoring_offsets_file(cwd: &Path) -> PathBuf {
+    std::env::var("COCKPIT_MONITORING_OFFSETS_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| cwd.join("logs/monitoring/runner-offsets.json"))
+}
+
+impl MonitoringManager {
+    fn start_runner_if_needed(&self, app: &AppHandle) -> Result<(), String> {
+        let mut started = self
+            .runner_started
+            .lock()
+            .map_err(|_| "failed to lock runner started state".to_string())?;
+        if *started {
+            return Ok(());
+        }
+        *started = true;
+        let manager = self.clone();
+        let app = app.clone();
+        thread::spawn(move || {
+            manager.run_runner_loop(app);
+        });
+        Ok(())
+    }
+
+    fn run_runner_loop(&self, app: AppHandle) {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let input_dir = monitoring_input_dir(&cwd);
+        let offsets_path = monitoring_offsets_file(&cwd);
+        let persisted = read_runner_offsets(&offsets_path);
+        let mut cursor = MonitoringRunnerCursor {
+            offsets: persisted.files,
+            pending: HashMap::new(),
+        };
+
+        log_monitoring_runner_event(serde_json::json!({
+            "event": "runner_started",
+            "cwd": cwd.to_string_lossy(),
+            "input_dir": input_dir.to_string_lossy(),
+            "offsets_path": offsets_path.to_string_lossy(),
+        }));
+
+        let mut attempt: u32 = 0;
+        loop {
+            match self.run_runner_cycle(&app, &input_dir, &offsets_path, &mut cursor) {
+                Ok(processed) => {
+                    if attempt > 0 {
+                        log_monitoring_runner_event(serde_json::json!({
+                            "event": "runner_recovered",
+                            "attempt": attempt,
+                            "processed_events": processed,
+                        }));
+                    }
+                    attempt = 0;
+                }
+                Err(error) => {
+                    attempt = attempt.saturating_add(1);
+                    let delay_ms = retry_delay_ms(attempt);
+                    log_monitoring_runner_event(serde_json::json!({
+                        "event": "runner_retry",
+                        "attempt": attempt,
+                        "delay_ms": delay_ms,
+                        "error": error,
+                    }));
+                    thread::sleep(Duration::from_millis(delay_ms));
+                    continue;
+                }
+            }
+            thread::sleep(Duration::from_millis(1000));
+        }
+    }
+
+    fn run_runner_cycle(
+        &self,
+        app: &AppHandle,
+        input_dir: &Path,
+        offsets_path: &Path,
+        cursor: &mut MonitoringRunnerCursor,
+    ) -> Result<usize, String> {
+        let mut files = Vec::new();
+        collect_codex_log_files(input_dir, &mut files);
+        files.sort();
+
+        let mut processed_events = 0_usize;
+        for file in files {
+            let key = file.to_string_lossy().to_string();
+            let mut previous_offset = *cursor.offsets.get(&key).unwrap_or(&0);
+            let metadata = fs::metadata(&file)
+                .map_err(|e| format!("metadata failed for {}: {e}", file.display()))?;
+            if previous_offset > metadata.len() {
+                previous_offset = 0;
+                cursor.pending.remove(&key);
+                log_monitoring_runner_event(serde_json::json!({
+                    "event": "runner_file_truncated",
+                    "file": key,
+                }));
+            }
+
+            let mut file_handle = File::open(&file)
+                .map_err(|e| format!("open failed for {}: {e}", file.display()))?;
+            file_handle
+                .seek(SeekFrom::Start(previous_offset))
+                .map_err(|e| format!("seek failed for {}: {e}", file.display()))?;
+
+            let mut bytes = Vec::new();
+            file_handle
+                .read_to_end(&mut bytes)
+                .map_err(|e| format!("read failed for {}: {e}", file.display()))?;
+
+            let next_offset = previous_offset.saturating_add(bytes.len() as u64);
+            let mut buffer = cursor.pending.remove(&key).unwrap_or_default();
+            buffer.extend(bytes);
+
+            let mut start = 0_usize;
+            for (idx, byte) in buffer.iter().enumerate() {
+                if *byte != b'\n' {
+                    continue;
+                }
+                let line = std::str::from_utf8(&buffer[start..idx])
+                    .map_err(|e| format!("invalid utf8 line for {}: {e}", file.display()))?;
+                let line_offset = previous_offset + idx as u64;
+                if let Some(event) = build_runner_event(&file, line_offset, line)? {
+                    let now = now_millis();
+                    let response = {
+                        let mut state = self
+                            .state
+                            .lock()
+                            .map_err(|_| "failed to lock monitoring state".to_string())?;
+                        state.ingest(event.request, now)
+                    };
+                    let _ = app.emit("monitoring-lifecycle", &response);
+                    processed_events = processed_events.saturating_add(1);
+                }
+                start = idx + 1;
+            }
+
+            if start < buffer.len() {
+                cursor.pending.insert(key.clone(), buffer[start..].to_vec());
+            }
+            cursor.offsets.insert(key, next_offset);
+        }
+
+        write_runner_offsets(
+            offsets_path,
+            &MonitoringRunnerOffsets {
+                files: cursor.offsets.clone(),
+            },
+        )?;
+        Ok(processed_events)
+    }
+}
 
 impl MonitoringState {
     fn register_definition(
@@ -367,15 +809,12 @@ impl MonitoringState {
             ));
         }
 
-        let dedupe_key = req
-            .dedupe_key
-            .clone()
-            .or_else(|| {
-                definition
-                    .dedupe_key
-                    .as_ref()
-                    .map(|base| format!("{base}:{:?}:{now}", req.state))
-            });
+        let dedupe_key = req.dedupe_key.clone().or_else(|| {
+            definition
+                .dedupe_key
+                .as_ref()
+                .map(|base| format!("{base}:{:?}:{now}", req.state))
+        });
         let message_id = req.message_id.clone().or_else(|| dedupe_key.clone());
         let response = self.ingest(
             LifecycleIngestRequest {
@@ -665,6 +1104,7 @@ fn pty_close(manager: State<'_, PtyManager>, req: PtyCloseRequest) -> Result<(),
 
 #[tauri::command]
 fn monitoring_ingest_lifecycle_event(
+    app: AppHandle,
     manager: State<'_, MonitoringManager>,
     req: LifecycleIngestRequest,
 ) -> Result<LifecycleIngestResponse, String> {
@@ -672,7 +1112,9 @@ fn monitoring_ingest_lifecycle_event(
         .state
         .lock()
         .map_err(|_| "failed to lock monitoring state".to_string())?;
-    Ok(state.ingest(req, now_millis()))
+    let response = state.ingest(req, now_millis());
+    let _ = app.emit("monitoring-lifecycle", &response);
+    Ok(response)
 }
 
 #[tauri::command]
@@ -725,10 +1167,16 @@ fn task_get_lifecycle(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let monitoring_manager = MonitoringManager::default();
     tauri::Builder::default()
         .manage(PtyManager::default())
-        .manage(MonitoringManager::default())
+        .manage(monitoring_manager)
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let manager = app.state::<MonitoringManager>();
+            manager.start_runner_if_needed(&app.handle())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             pty_create,
@@ -748,6 +1196,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, fs::File, io::Write};
 
     fn request(
         task_id: &str,
@@ -1005,5 +1454,64 @@ mod tests {
             .unwrap_err();
 
         assert!(err.contains("task registration not found"));
+    }
+
+    #[test]
+    fn runner_event_parses_state_from_payload() {
+        let path = Path::new("/tmp/logs/codex/CON-90/20260307-000001.jsonl");
+        let line = r#"{"type":"posttooluse","member":"MemberA","id":"evt-1"}"#;
+        let event = build_runner_event(path, 32, line)
+            .expect("parse should succeed")
+            .expect("event should be produced");
+
+        assert_eq!(event.request.task_id, "CON-90");
+        assert_eq!(event.request.member, "MemberA");
+        assert_eq!(event.request.state, TaskLifecycleState::InProgress);
+        assert_eq!(event.request.message_id.as_deref(), Some("evt-1"));
+    }
+
+    #[test]
+    fn runner_event_parses_codex_member_report() {
+        let path = Path::new("/tmp/logs/codex/CON-90/20260307-000001.jsonl");
+        let line = r#"{"type":"item.completed","item":{"type":"agent_message","text":"@Leader: CON-90 in_review. commit=abc"}} "#;
+        let event = build_runner_event(path, 44, line)
+            .expect("parse should succeed")
+            .expect("event should be produced");
+
+        assert_eq!(event.request.task_id, "CON-90");
+        assert_eq!(event.request.state, TaskLifecycleState::InProgress);
+        assert_eq!(event.request.source.as_deref(), Some("backend_runner"));
+    }
+
+    #[test]
+    fn runner_offsets_roundtrip() {
+        let root = std::env::temp_dir().join(format!("con90-offsets-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("logs/monitoring/runner-offsets.json");
+        let mut files = HashMap::new();
+        files.insert("/tmp/a.jsonl".to_string(), 123_u64);
+        write_runner_offsets(
+            &path,
+            &MonitoringRunnerOffsets {
+                files: files.clone(),
+            },
+        )
+        .unwrap();
+        let loaded = read_runner_offsets(&path);
+        assert_eq!(loaded.files, files);
+    }
+
+    #[test]
+    fn runner_collects_codex_jsonl_files() {
+        let root = std::env::temp_dir().join(format!("con90-collect-{}", now_millis()));
+        let target = root.join("a/logs/codex/CON-90");
+        fs::create_dir_all(&target).unwrap();
+        let file = target.join("20260307-000001.jsonl");
+        let mut handle = File::create(&file).unwrap();
+        writeln!(handle, "{{\"type\":\"sent\"}}").unwrap();
+
+        let mut files = Vec::new();
+        collect_codex_log_files(&root, &mut files);
+        assert!(files.iter().any(|p| p == &file));
     }
 }

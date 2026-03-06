@@ -1,27 +1,27 @@
 .PHONY: build
 build:
-	cargo build -C ..
+	cargo build
 
 .PHONY: build-release
 build-release:
-	cargo build -C .. --release
+	cargo build --release
 
 .PHONY: fmt
 fmt:
-	cargo fmt -C ..
+	cargo fmt
 
 .PHONY: fmt-check
 fmt-check:
-	cargo fmt -C .. --check
+	cargo fmt --check
 
 .PHONY: clippy
 clippy:
-	cargo clippy -C ..
+	cargo clippy
 
 .PHONY: test
 test:
-	cargo test -C ..
+	cargo test
 
 .PHONY: clean
 clean:
-	cargo clean -C ..
+	cargo clean
