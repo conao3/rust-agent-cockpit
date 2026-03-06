@@ -68,7 +68,15 @@ Before merge, Leader must verify at least:
 After merge:
 
 - report merge result (PR URL + merge commit) to operator
-- request orchestrator post-merge sync/cleanup
+- remove the task worktree yourself
+- delete local feature branch if no longer needed
+
+Recommended cleanup order:
+
+```bash
+git worktree remove ./.wt/<feature-name>
+git branch -d <feature-name>
+```
 
 ## Worktree
 

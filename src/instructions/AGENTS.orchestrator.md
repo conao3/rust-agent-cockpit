@@ -97,7 +97,7 @@ For tasks delegated to MemberA:
 3. Orchestrator forwards report to Leader without interpreting success/failure.
 4. Leader reviews PR.
 5. If Leader approves, Leader merges PR.
-6. After merge, Orchestrator performs repository sync on main checkout and cleanup.
+6. After merge, Leader performs cleanup; Orchestrator only records/monitors.
 
 ## Minimal State Machine
 
@@ -150,22 +150,18 @@ These defaults prevent duplicate execution better than permissive routing.
 
 ## Post-Merge Worktree Cleanup
 
-After PR is merged, remove the related worktree.
+After PR is merged, ensure the related worktree is removed by Leader.
 
 Required flow:
 
 1. Detect merge completion (`gh pr view <num> --json mergedAt` or equivalent API).
 2. Resolve the task worktree path (for example `./.wt/con-35`).
 3. Ensure no active process is using that path.
-4. Remove worktree first:
+4. Confirm Leader removed worktree first:
    - `git worktree remove ./.wt/<feature-name>`
-5. Delete local feature branch if no longer needed:
+5. Confirm Leader deleted local feature branch if no longer needed:
    - `git branch -d <feature-name>`
-6. Sync main checkout:
-   - `git checkout master`
-   - `git pull --ff-only` (preferred)
-   - if ff-only is not possible, report divergence to Leader and follow project policy
-7. Log cleanup result and notify Leader:
+6. Log cleanup result and notify Leader:
 
 ```
 @Orchestrator: Worktree cleaned for <task_id> at ./.wt/<feature-name>.
