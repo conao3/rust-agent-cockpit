@@ -571,10 +571,7 @@ fn collect_codex_log_files(root: &Path, out: &mut Vec<PathBuf>) {
         {
             continue;
         }
-        let path_str = path.to_string_lossy();
-        if path_str.contains("/logs/codex/") || path_str.contains("\\logs\\codex\\") {
-            out.push(path);
-        }
+        out.push(path);
     }
 }
 
@@ -602,6 +599,18 @@ fn retry_delay_ms(attempt: u32) -> u64 {
     500 * (1_u64 << capped)
 }
 
+fn monitoring_input_dir(cwd: &Path) -> PathBuf {
+    std::env::var("COCKPIT_MONITORING_INPUT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| cwd.join("logs/codex"))
+}
+
+fn monitoring_offsets_file(cwd: &Path) -> PathBuf {
+    std::env::var("COCKPIT_MONITORING_OFFSETS_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| cwd.join("logs/monitoring/runner-offsets.json"))
+}
+
 impl MonitoringManager {
     fn start_runner_if_needed(&self, app: &AppHandle) -> Result<(), String> {
         let mut started = self
@@ -622,7 +631,8 @@ impl MonitoringManager {
 
     fn run_runner_loop(&self, app: AppHandle) {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let offsets_path = cwd.join("logs/monitoring/runner-offsets.json");
+        let input_dir = monitoring_input_dir(&cwd);
+        let offsets_path = monitoring_offsets_file(&cwd);
         let persisted = read_runner_offsets(&offsets_path);
         let mut cursor = MonitoringRunnerCursor {
             offsets: persisted.files,
@@ -632,11 +642,13 @@ impl MonitoringManager {
         log_monitoring_runner_event(serde_json::json!({
             "event": "runner_started",
             "cwd": cwd.to_string_lossy(),
+            "input_dir": input_dir.to_string_lossy(),
+            "offsets_path": offsets_path.to_string_lossy(),
         }));
 
         let mut attempt: u32 = 0;
         loop {
-            match self.run_runner_cycle(&app, &cwd, &offsets_path, &mut cursor) {
+            match self.run_runner_cycle(&app, &input_dir, &offsets_path, &mut cursor) {
                 Ok(processed) => {
                     if attempt > 0 {
                         log_monitoring_runner_event(serde_json::json!({
@@ -667,12 +679,12 @@ impl MonitoringManager {
     fn run_runner_cycle(
         &self,
         app: &AppHandle,
-        cwd: &Path,
+        input_dir: &Path,
         offsets_path: &Path,
         cursor: &mut MonitoringRunnerCursor,
     ) -> Result<usize, String> {
         let mut files = Vec::new();
-        collect_codex_log_files(cwd, &mut files);
+        collect_codex_log_files(input_dir, &mut files);
         files.sort();
 
         let mut processed_events = 0_usize;
