@@ -262,6 +262,46 @@ struct MonitoringRunnerEvent {
     request: LifecycleIngestRequest,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MonitoringRunnerIgnoreReason {
+    NonLifecyclePayload,
+    MissingTaskId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MonitoringRunnerParseError {
+    InvalidJson(String),
+}
+
+impl std::fmt::Display for MonitoringRunnerParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidJson(message) => write!(f, "invalid runner event json: {message}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LinearCommentParseError {
+    EmptyIssueId,
+    EmptyBody,
+    MissingTargetMember,
+    EmptyNormalizedBody,
+}
+
+impl std::fmt::Display for LinearCommentParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyIssueId => write!(f, "issue_id must not be empty"),
+            Self::EmptyBody => write!(f, "body must not be empty"),
+            Self::MissingTargetMember => {
+                write!(f, "target_member could not be resolved from comment")
+            }
+            Self::EmptyNormalizedBody => write!(f, "normalized body must not be empty"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct MonitoringRunnerOffsets {
     files: HashMap<String, u64>,
@@ -772,13 +812,13 @@ fn normalize_linear_body(body: &str, member: &str) -> String {
 fn normalize_linear_comment(
     comment: LinearCommentEnvelope,
     fallback_source: &str,
-) -> Result<NormalizedLinearMessage, String> {
+) -> Result<NormalizedLinearMessage, LinearCommentParseError> {
     let issue_id = comment.issue_id.trim().to_string();
     if issue_id.is_empty() {
-        return Err("issue_id must not be empty".to_string());
+        return Err(LinearCommentParseError::EmptyIssueId);
     }
     if comment.body.trim().is_empty() {
-        return Err("body must not be empty".to_string());
+        return Err(LinearCommentParseError::EmptyBody);
     }
 
     let target_member = comment
@@ -793,7 +833,7 @@ fn normalize_linear_comment(
             }
         })
         .or_else(|| first_mentioned_member(&comment.body))
-        .ok_or_else(|| "target_member could not be resolved from comment".to_string())?;
+        .ok_or(LinearCommentParseError::MissingTargetMember)?;
     let source = comment
         .source
         .as_deref()
@@ -812,6 +852,9 @@ fn normalize_linear_comment(
             format!("linear:{}:{}:{}", issue_id, target_member, compact_body)
         });
     let body = normalize_linear_body(&comment.body, &target_member);
+    if body.is_empty() {
+        return Err(LinearCommentParseError::EmptyNormalizedBody);
+    }
 
     Ok(NormalizedLinearMessage {
         issue_id,
@@ -1236,7 +1279,9 @@ fn build_runner_event(
     offset: u64,
     line: &str,
 ) -> Result<Option<MonitoringRunnerEvent>, String> {
-    let payload: serde_json::Value = serde_json::from_str(line).map_err(|e| format!("{e}"))?;
+    let payload: serde_json::Value = serde_json::from_str(line).map_err(|e| {
+        MonitoringRunnerParseError::InvalidJson(e.to_string()).to_string()
+    })?;
     if let Ok(envelope) = serde_json::from_value::<CodexEventEnvelope>(payload.clone()) {
         if envelope.event_type == "item.completed" {
             if let Some(item) = envelope.item {
@@ -1271,11 +1316,27 @@ fn build_runner_event(
 
     let state = match extract_state(&payload) {
         Some(state) => state,
-        None => return Ok(None),
+        None => {
+            log_monitoring_runner_event(serde_json::json!({
+                "event": "runner_event_ignored",
+                "reason": format!("{:?}", MonitoringRunnerIgnoreReason::NonLifecyclePayload),
+                "path": path.to_string_lossy(),
+                "offset": offset,
+            }));
+            return Ok(None);
+        }
     };
     let task_id = match extract_task_id(path, &payload) {
         Some(task_id) => task_id,
-        None => return Ok(None),
+        None => {
+            log_monitoring_runner_event(serde_json::json!({
+                "event": "runner_event_ignored",
+                "reason": format!("{:?}", MonitoringRunnerIgnoreReason::MissingTaskId),
+                "path": path.to_string_lossy(),
+                "offset": offset,
+            }));
+            return Ok(None);
+        }
     };
     let member = extract_member(&payload);
     let source = json_string(&payload, &["source"]).unwrap_or_else(|| "backend_runner".to_string());
@@ -1790,7 +1851,7 @@ fn ingest_linear_comment(
     comment: LinearCommentEnvelope,
     fallback_source: &str,
 ) -> Result<LinearMessageIngestResponse, String> {
-    let message = normalize_linear_comment(comment, fallback_source)?;
+    let message = normalize_linear_comment(comment, fallback_source).map_err(|e| e.to_string())?;
 
     {
         let mut state = monitoring_manager
@@ -2876,5 +2937,56 @@ mod tests {
         assert_eq!(first.decision, LinearMessageDecision::Unroutable);
         assert_eq!(second.decision, LinearMessageDecision::Duplicate);
         assert_eq!(first.event_key, second.event_key);
+    }
+
+    #[test]
+    fn linear_normalization_rejects_empty_normalized_body() {
+        let err = normalize_linear_comment(
+            LinearCommentEnvelope {
+                issue_id: "CON-75".to_string(),
+                comment_id: None,
+                body: "@MemberA".to_string(),
+                target_member: Some("MemberA".to_string()),
+                source: None,
+            },
+            "webhook",
+        )
+        .unwrap_err();
+
+        assert_eq!(err, LinearCommentParseError::EmptyNormalizedBody);
+    }
+
+    #[test]
+    fn linear_normalization_rejects_missing_member() {
+        let err = normalize_linear_comment(
+            LinearCommentEnvelope {
+                issue_id: "CON-75".to_string(),
+                comment_id: None,
+                body: "please check this".to_string(),
+                target_member: None,
+                source: None,
+            },
+            "webhook",
+        )
+        .unwrap_err();
+
+        assert_eq!(err, LinearCommentParseError::MissingTargetMember);
+    }
+
+    #[test]
+    fn runner_event_returns_error_on_invalid_json() {
+        let path = Path::new("/tmp/logs/codex/CON-90/20260307-000001.jsonl");
+        let err = build_runner_event(path, 91, "{invalid").unwrap_err();
+
+        assert!(err.contains("invalid runner event json"));
+    }
+
+    #[test]
+    fn runner_event_ignores_non_lifecycle_payload() {
+        let path = Path::new("/tmp/logs/codex/CON-90/20260307-000001.jsonl");
+        let line = r#"{"type":"trace.span","id":"evt-1"}"#;
+        let event = build_runner_event(path, 32, line).expect("parse should succeed");
+
+        assert!(event.is_none());
     }
 }
