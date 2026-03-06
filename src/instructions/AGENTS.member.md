@@ -96,6 +96,7 @@ Progress visibility requirements:
 - Keep startup reads silent (`cat ... >/dev/null`) and avoid printing full memory file contents to task logs.
 - Do not include `src/instructions/*` changes in implementation PRs unless Leader explicitly requests instruction updates for that task.
 - Startup-file reads are mandatory but must stay silent; do not print SOUL/IDENTITY/MEMORY contents in task output.
+- Always emit `@Leader: ACK <task-id> start` promptly after task injection in your pane; if dispatch came only via issue comment, request explicit pane-run instruction.
 
 ## Worktree
 

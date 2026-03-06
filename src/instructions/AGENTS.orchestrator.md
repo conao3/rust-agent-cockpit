@@ -254,3 +254,4 @@ At the end of every batch:
 7. For parallel dispatch, prefer domain-separated pairings (for example frontend + backend) to reduce overlap risk.
 8. Reject member handoff if PR includes unrelated `src/instructions/*` changes unless the assignment explicitly required instruction updates.
 9. Treat startup-read log dumps as protocol violation: startup reads must be silent (`>/dev/null`) and must not print memory contents.
+10. Linear comment dispatch alone is not sufficient: if no ACK is observed within timeout, orchestrator must inject execution prompt to the assigned member tmux pane and re-check.

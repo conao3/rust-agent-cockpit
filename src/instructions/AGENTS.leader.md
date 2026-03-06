@@ -142,6 +142,7 @@ Visibility discipline for each active member:
 - Require startup memory reads to be silent (no full file dumps in logs), then begin ACK/heartbeat flow.
 - If an implementation PR contains unrelated `src/instructions/*` edits, request member cleanup/rebase before merge.
 - Enforce startup-read silence strictly: no `cat/sed` dump of memory files to visible logs; require redirect to `/dev/null`.
+- If ACK is not received within the required window, re-dispatch via visible member pane execution (not comment-only) and record timeout recovery action.
 
 ## Worktree
 
