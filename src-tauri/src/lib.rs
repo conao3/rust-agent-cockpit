@@ -22,6 +22,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 const COCKPIT_HOOK_SCRIPT_RELATIVE_PATH: &str = ".claude/hooks/cockpit-monitor.sh";
 const COCKPIT_CLAUDE_SETTINGS_RELATIVE_PATH: &str = ".claude/settings.json";
 const COCKPIT_HOOK_SOURCE: &str = "claude_hook";
+const AGENT_SETTINGS_RELATIVE_PATH: &str = ".agent-cockpit/agent-settings.toml";
+const AGENT_SETTINGS_VERSION: u32 = 1;
 
 struct ClaudeHookSpec {
     event_name: &'static str,
@@ -355,6 +357,44 @@ struct ClaudeWorktreeHooksResponse {
     settings_path: String,
     hook_script_path: String,
     log_file_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AgentSettings {
+    id: String,
+    name: String,
+    command: String,
+    system_prompt: Option<String>,
+    #[serde(default)]
+    tool_restrictions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct AgentSettingsDocument {
+    version: u32,
+    #[serde(default)]
+    agents: Vec<AgentSettings>,
+}
+
+impl Default for AgentSettingsDocument {
+    fn default() -> Self {
+        Self {
+            version: AGENT_SETTINGS_VERSION,
+            agents: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSettingsGetRequest {}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSettingsSaveRequest {
+    settings: AgentSettingsDocument,
 }
 
 #[derive(Debug, Deserialize)]
@@ -937,6 +977,70 @@ fn write_file_if_changed(path: &Path, body: &[u8]) -> Result<(), String> {
     fs::write(path, body).map_err(|e| format!("write failed for {}: {e}", path.display()))
 }
 
+fn agent_settings_path(cockpit_root: &Path) -> PathBuf {
+    cockpit_root.join(AGENT_SETTINGS_RELATIVE_PATH)
+}
+
+fn validate_agent_settings(settings: &AgentSettingsDocument) -> Result<(), String> {
+    if settings.version == 0 {
+        return Err("settings.version must be greater than 0".to_string());
+    }
+    let mut seen = HashSet::new();
+    for agent in &settings.agents {
+        let id = agent.id.trim();
+        if id.is_empty() {
+            return Err("agent.id must not be empty".to_string());
+        }
+        if !seen.insert(id.to_string()) {
+            return Err(format!("duplicate agent.id: {id}"));
+        }
+        if agent.name.trim().is_empty() {
+            return Err(format!("agent.name must not be empty: {id}"));
+        }
+        if agent.command.trim().is_empty() {
+            return Err(format!("agent.command must not be empty: {id}"));
+        }
+        for tool in &agent.tool_restrictions {
+            if tool.trim().is_empty() {
+                return Err(format!(
+                    "agent.toolRestrictions must not contain empty value: {id}"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn read_agent_settings(cockpit_root: &Path) -> Result<AgentSettingsDocument, String> {
+    let path = agent_settings_path(cockpit_root);
+    if !path.exists() {
+        return Ok(AgentSettingsDocument::default());
+    }
+    let body = fs::read_to_string(&path)
+        .map_err(|e| format!("read settings failed for {}: {e}", path.display()))?;
+    let settings: AgentSettingsDocument = toml::from_str(&body)
+        .map_err(|e| format!("parse settings failed for {}: {e}", path.display()))?;
+    validate_agent_settings(&settings)?;
+    Ok(settings)
+}
+
+fn write_agent_settings(
+    cockpit_root: &Path,
+    settings: AgentSettingsDocument,
+) -> Result<AgentSettingsDocument, String> {
+    validate_agent_settings(&settings)?;
+    let path = agent_settings_path(cockpit_root);
+    let body =
+        toml::to_string_pretty(&settings).map_err(|e| format!("serialize settings failed: {e}"))?;
+    let body_with_newline = if body.ends_with('\n') {
+        body.into_bytes()
+    } else {
+        format!("{body}\n").into_bytes()
+    };
+    write_file_if_changed(&path, &body_with_newline)?;
+    Ok(settings)
+}
+
 fn command_for_hook(
     script_path: &Path,
     log_file_path: &Path,
@@ -1279,9 +1383,8 @@ fn build_runner_event(
     offset: u64,
     line: &str,
 ) -> Result<Option<MonitoringRunnerEvent>, String> {
-    let payload: serde_json::Value = serde_json::from_str(line).map_err(|e| {
-        MonitoringRunnerParseError::InvalidJson(e.to_string()).to_string()
-    })?;
+    let payload: serde_json::Value = serde_json::from_str(line)
+        .map_err(|e| MonitoringRunnerParseError::InvalidJson(e.to_string()).to_string())?;
     if let Ok(envelope) = serde_json::from_value::<CodexEventEnvelope>(payload.clone()) {
         if envelope.event_type == "item.completed" {
             if let Some(item) = envelope.item {
@@ -1415,7 +1518,12 @@ fn monitoring_offsets_file(cwd: &Path) -> PathBuf {
 }
 
 impl PtyManager {
-    fn register_linear_route(&self, pty_id: &str, issue_id: &str, member: &str) -> Result<(), String> {
+    fn register_linear_route(
+        &self,
+        pty_id: &str,
+        issue_id: &str,
+        member: &str,
+    ) -> Result<(), String> {
         validate_monitoring_identity(issue_id, member)?;
         let route_key = linear_route_key(issue_id, member);
         let mut routes = self
@@ -1426,19 +1534,30 @@ impl PtyManager {
         Ok(())
     }
 
-    fn remove_linear_route(&self, issue_id: &str, member: &str, pty_id: &str) -> Result<(), String> {
+    fn remove_linear_route(
+        &self,
+        issue_id: &str,
+        member: &str,
+        pty_id: &str,
+    ) -> Result<(), String> {
         let route_key = linear_route_key(issue_id, member);
         let mut routes = self
             .routes
             .lock()
             .map_err(|_| "failed to lock pty routes".to_string())?;
-        if routes.get(&route_key).is_some_and(|registered| registered == pty_id) {
+        if routes
+            .get(&route_key)
+            .is_some_and(|registered| registered == pty_id)
+        {
             routes.remove(&route_key);
         }
         Ok(())
     }
 
-    fn route_linear_message(&self, msg: &NormalizedLinearMessage) -> Result<Option<String>, String> {
+    fn route_linear_message(
+        &self,
+        msg: &NormalizedLinearMessage,
+    ) -> Result<Option<String>, String> {
         let route_key = linear_route_key(&msg.issue_id, &msg.target_member);
         let pty_id = {
             let routes = self
@@ -1879,7 +1998,9 @@ fn ingest_linear_comment(
             }));
             return Ok(response);
         }
-        state.seen_linear_event_keys.insert(message.event_key.clone());
+        state
+            .seen_linear_event_keys
+            .insert(message.event_key.clone());
     }
 
     let routed_pty_id = pty_manager.route_linear_message(&message)?;
@@ -1925,6 +2046,21 @@ fn claude_prepare_worktree_hooks(
     let cockpit_root =
         std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
     ensure_claude_worktree_hooks(&worktree_dir, &req.task_id, &req.member, &cockpit_root)
+}
+
+#[tauri::command]
+fn agent_settings_get(req: AgentSettingsGetRequest) -> Result<AgentSettingsDocument, String> {
+    let _ = req;
+    let cockpit_root =
+        std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
+    read_agent_settings(&cockpit_root)
+}
+
+#[tauri::command]
+fn agent_settings_save(req: AgentSettingsSaveRequest) -> Result<AgentSettingsDocument, String> {
+    let cockpit_root =
+        std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
+    write_agent_settings(&cockpit_root, req.settings)
 }
 
 #[tauri::command]
@@ -2350,6 +2486,8 @@ pub fn run() {
             worktree_delete,
             worktree_title_info,
             claude_prepare_worktree_hooks,
+            agent_settings_get,
+            agent_settings_save,
             monitoring_ingest_lifecycle_event,
             monitoring_get_lifecycle_state,
             task_register_definition,
@@ -2683,6 +2821,81 @@ mod tests {
         collect_codex_log_files(&root, &mut files);
         assert!(files.iter().any(|p| p == &file));
     }
+
+    fn sample_agent_settings() -> AgentSettingsDocument {
+        AgentSettingsDocument {
+            version: AGENT_SETTINGS_VERSION,
+            agents: vec![
+                AgentSettings {
+                    id: "leader".to_string(),
+                    name: "Leader".to_string(),
+                    command: "codex".to_string(),
+                    system_prompt: Some("coordinate and dispatch".to_string()),
+                    tool_restrictions: vec!["git".to_string(), "cargo".to_string()],
+                },
+                AgentSettings {
+                    id: "member-b".to_string(),
+                    name: "MemberB".to_string(),
+                    command: "codex".to_string(),
+                    system_prompt: None,
+                    tool_restrictions: Vec::new(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn agent_settings_defaults_when_file_missing() {
+        let root =
+            std::env::temp_dir().join(format!("con29-agent-settings-missing-{}", now_millis()));
+        let loaded = read_agent_settings(&root).unwrap();
+        assert_eq!(loaded, AgentSettingsDocument::default());
+    }
+
+    #[test]
+    fn agent_settings_roundtrip_toml_persistence() {
+        let root =
+            std::env::temp_dir().join(format!("con29-agent-settings-roundtrip-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        let saved = write_agent_settings(&root, sample_agent_settings()).unwrap();
+        let loaded = read_agent_settings(&root).unwrap();
+        assert_eq!(loaded, saved);
+        assert!(agent_settings_path(&root).exists());
+    }
+
+    #[test]
+    fn agent_settings_rejects_duplicate_ids() {
+        let root = std::env::temp_dir().join(format!("con29-agent-settings-dup-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        let mut settings = sample_agent_settings();
+        settings.agents[1].id = "leader".to_string();
+        let err = write_agent_settings(&root, settings).unwrap_err();
+        assert!(err.contains("duplicate agent.id"));
+    }
+
+    #[test]
+    fn agent_settings_rejects_blank_fields() {
+        let root =
+            std::env::temp_dir().join(format!("con29-agent-settings-invalid-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        let mut settings = sample_agent_settings();
+        settings.agents[0].command = " ".to_string();
+        settings.agents[1].tool_restrictions.push("  ".to_string());
+        let err = write_agent_settings(&root, settings).unwrap_err();
+        assert!(err.contains("agent.command must not be empty"));
+    }
+
+    #[test]
+    fn agent_settings_read_reports_parse_error_for_invalid_toml() {
+        let root =
+            std::env::temp_dir().join(format!("con29-agent-settings-parse-{}", now_millis()));
+        let settings_path = agent_settings_path(&root);
+        fs::create_dir_all(settings_path.parent().unwrap()).unwrap();
+        fs::write(&settings_path, "version = \n[[agents]]\nid = [").unwrap();
+        let err = read_agent_settings(&root).unwrap_err();
+        assert!(err.contains("parse settings failed"));
+    }
+
     #[test]
     fn monitoring_event_auto_registers_task_definition() {
         let mut monitoring = MonitoringState::default();
