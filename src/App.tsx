@@ -65,11 +65,106 @@ export const resolvePtyCreateContext = (search: string): PtyCreateContext => {
     member,
   };
 };
+type WindowId = "connections" | "terminal";
 
+type ManagedWindow = {
+  id: WindowId;
+  title: string;
+  status?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const MIN_WINDOW_WIDTH = 300;
+const MIN_WINDOW_HEIGHT = 220;
+
+const initialWindows: ManagedWindow[] = [
+  {
+    id: "connections",
+    title: "Connections",
+    status: "connected",
+    x: 16,
+    y: 16,
+    width: 420,
+    height: 380,
+  },
+  {
+    id: "terminal",
+    title: "PTY Terminal",
+    status: "connecting",
+    x: 220,
+    y: 120,
+    width: 760,
+    height: 440,
+  },
+];
 function App() {
+  const desktopRef = useRef<HTMLDivElement | null>(null);
   const terminalHostRef = useRef<HTMLDivElement | null>(null);
   const ptyIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState("connecting");
+  const [windows, setWindows] = useState<ManagedWindow[]>(initialWindows);
+  const [zOrder, setZOrder] = useState<WindowId[]>(["connections", "terminal"]);
+
+  const updateWindow = (id: WindowId, updater: (window: ManagedWindow) => ManagedWindow) => {
+    setWindows((current) => current.map((window) => (window.id === id ? updater(window) : window)));
+  };
+
+  const activateWindow = (id: WindowId) => {
+    setZOrder((current) => [...current.filter((entry) => entry !== id), id]);
+  };
+
+  const moveWindow = (id: WindowId, nextX: number, nextY: number) => {
+    const desktop = desktopRef.current;
+    const bounds = desktop?.getBoundingClientRect();
+
+    updateWindow(id, (window) => {
+      if (!bounds) {
+        return {
+          ...window,
+          x: Math.max(0, nextX),
+          y: Math.max(0, nextY),
+        };
+      }
+
+      const maxX = Math.max(0, bounds.width - 140);
+      const maxY = Math.max(0, bounds.height - 40);
+      return {
+        ...window,
+        x: Math.min(Math.max(0, nextX), maxX),
+        y: Math.min(Math.max(0, nextY), maxY),
+      };
+    });
+  };
+
+  const resizeWindow = (id: WindowId, nextWidth: number, nextHeight: number) => {
+    const desktop = desktopRef.current;
+    const bounds = desktop?.getBoundingClientRect();
+
+    updateWindow(id, (window) => {
+      const minWidth = MIN_WINDOW_WIDTH;
+      const minHeight = MIN_WINDOW_HEIGHT;
+      const maxWidth = bounds ? Math.max(minWidth, bounds.width - window.x) : Number.POSITIVE_INFINITY;
+      const maxHeight = bounds
+        ? Math.max(minHeight, bounds.height - window.y)
+        : Number.POSITIVE_INFINITY;
+
+      return {
+        ...window,
+        width: Math.min(Math.max(minWidth, nextWidth), maxWidth),
+        height: Math.min(Math.max(minHeight, nextHeight), maxHeight),
+      };
+    });
+  };
+
+  useEffect(() => {
+    updateWindow("terminal", (window) => ({
+      ...window,
+      status,
+    }));
+  }, [status]);
 
   useEffect(() => {
     const host = terminalHostRef.current;
@@ -185,13 +280,28 @@ function App() {
 
   return (
     <main className="app">
-      <div className="app-grid">
-        <Window title="Connections" status="connected">
-          <ConnectionManager nodes={[...graphNodes]} />
-        </Window>
-        <Window title="PTY Terminal" status={status}>
-          <div className="terminal-host" ref={terminalHostRef} />
-        </Window>
+      <div className="desktop" ref={desktopRef}>
+        {windows.map((window) => (
+          <Window
+            key={window.id}
+            x={window.x}
+            y={window.y}
+            width={window.width}
+            height={window.height}
+            zIndex={zOrder.indexOf(window.id) + 1}
+            title={window.title}
+            status={window.status}
+            onActivate={() => activateWindow(window.id)}
+            onMove={(x, y) => moveWindow(window.id, x, y)}
+            onResize={(width, height) => resizeWindow(window.id, width, height)}
+          >
+            {window.id === "connections" ? (
+              <ConnectionManager nodes={[...graphNodes]} />
+            ) : (
+              <div className="terminal-host" ref={terminalHostRef} />
+            )}
+          </Window>
+        ))}
       </div>
     </main>
   );
