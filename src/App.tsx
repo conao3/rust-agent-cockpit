@@ -8,6 +8,10 @@ import "./App.css";
 
 type PtyId = string | number;
 
+type PtyCreateResponse = {
+  id: string;
+};
+
 type PtyOutputPayload =
   | string
   | {
@@ -17,9 +21,16 @@ type PtyOutputPayload =
       output?: string;
     };
 
+const normalizePtyId = (id: PtyId | null | undefined): string | null => {
+  if (id === null || id === undefined) {
+    return null;
+  }
+  return String(id);
+};
+
 function App() {
   const terminalHostRef = useRef<HTMLDivElement | null>(null);
-  const ptyIdRef = useRef<PtyId | null>(null);
+  const ptyIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState("connecting");
 
   useEffect(() => {
@@ -48,22 +59,44 @@ function App() {
     let detachEvent: UnlistenFn | undefined;
     const detachInput = terminal.onData((data) => {
       const id = ptyIdRef.current;
-      if (id === null) {
+      if (!id) {
         return;
       }
-      invoke("pty_write", { id, data }).catch((error) => {
+      invoke("pty_write", { req: { id, data } }).catch((error) => {
         terminal.writeln(`\r\n[pty_write error] ${String(error)}`);
       });
     });
 
+    const sendResize = () => {
+      const id = ptyIdRef.current;
+      if (!id) {
+        return;
+      }
+      invoke("pty_resize", {
+        req: {
+          id,
+          cols: terminal.cols,
+          rows: terminal.rows,
+        },
+      }).catch((error) => {
+        terminal.writeln(`\r\n[pty_resize error] ${String(error)}`);
+      });
+    };
+
     const onResize = () => {
       fitAddon.fit();
+      sendResize();
     };
     window.addEventListener("resize", onResize);
 
     const bootstrap = async () => {
       try {
-        const id = await invoke<PtyId>("pty_create");
+        const { id } = await invoke<PtyCreateResponse>("pty_create", {
+          req: {
+            cols: terminal.cols,
+            rows: terminal.rows,
+          },
+        });
         ptyIdRef.current = id;
 
         detachEvent = await listen<PtyOutputPayload>("pty-output", (event) => {
@@ -73,8 +106,8 @@ function App() {
             return;
           }
 
-          const eventId = payload.ptyId ?? payload.id;
-          if (eventId !== undefined && eventId !== ptyIdRef.current) {
+          const eventId = normalizePtyId(payload.ptyId ?? payload.id);
+          if (eventId && eventId !== ptyIdRef.current) {
             return;
           }
 
@@ -98,6 +131,10 @@ function App() {
       detachInput.dispose();
       if (detachEvent) {
         detachEvent();
+      }
+      const id = ptyIdRef.current;
+      if (id) {
+        void invoke("pty_close", { req: { id } });
       }
       terminal.dispose();
       ptyIdRef.current = null;
