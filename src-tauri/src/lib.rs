@@ -61,6 +61,7 @@ struct TaskLifecycleRecord {
 struct TaskDefinitionRecord {
     title: Option<String>,
     dedupe_key: Option<String>,
+    auto_registered: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -771,6 +772,7 @@ impl MonitoringState {
         if req.dedupe_key.is_some() {
             definition.dedupe_key = req.dedupe_key;
         }
+        definition.auto_registered = false;
 
         let lifecycle = self.task_states.get(&key);
         Ok(TaskLifecycleSnapshot {
@@ -879,6 +881,11 @@ impl MonitoringState {
     fn ingest(&mut self, req: LifecycleIngestRequest, now: u64) -> LifecycleIngestResponse {
         let event_key = req.event_key();
         let key = lifecycle_key(&req.task_id, &req.member);
+        self.task_definitions.entry(key.clone()).or_insert_with(|| TaskDefinitionRecord {
+            title: None,
+            dedupe_key: None,
+            auto_registered: true,
+        });
 
         if self.seen_event_keys.contains(&event_key) {
             let fallback_state = req.state;
@@ -931,6 +938,11 @@ impl MonitoringState {
 
         log_monitoring_event(serde_json::json!({
             "event": "lifecycle_ingest",
+            "registration_mode": self
+                .task_definitions
+                .get(&lifecycle_key(&record.task_id, &record.member))
+                .map(|definition| if definition.auto_registered { "auto" } else { "manual" })
+                .unwrap_or("unknown"),
             "decision": decision,
             "task_id": req.task_id,
             "member": req.member,
@@ -1513,5 +1525,28 @@ mod tests {
         let mut files = Vec::new();
         collect_codex_log_files(&root, &mut files);
         assert!(files.iter().any(|p| p == &file));
+    }
+
+    #[test]
+    fn monitoring_event_auto_registers_task_definition() {
+        let mut monitoring = MonitoringState::default();
+        let _ = monitoring.ingest(
+            request("CON-91", "MemberB", TaskLifecycleState::Sent, "event-1"),
+            10,
+        );
+
+        let snapshot = monitoring
+            .get_registered_lifecycle(TaskLifecycleLookupRequest {
+                task_id: "CON-91".to_string(),
+                member: "MemberB".to_string(),
+            })
+            .expect("task should be auto-registered");
+
+        assert_eq!(snapshot.task_id, "CON-91");
+        assert_eq!(snapshot.member, "MemberB");
+        assert_eq!(snapshot.state, Some(TaskLifecycleState::Sent));
+        assert_eq!(snapshot.history_len, 1);
+        assert_eq!(snapshot.title, None);
+        assert_eq!(snapshot.dedupe_key, None);
     }
 }
