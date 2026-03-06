@@ -5,6 +5,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
 import "./App.css";
+import { ConnectionManager } from "./components/ConnectionManager";
 import { Window } from "./components/Window";
 
 type PtyId = string | number;
@@ -28,6 +29,12 @@ const normalizePtyId = (id: PtyId | null | undefined): string | null => {
   }
   return String(id);
 };
+
+const graphNodes = [
+  { id: "leader", label: "Leader" },
+  { id: "member-a", label: "Member A" },
+  { id: "member-b", label: "Member B" },
+] as const;
 
 function App() {
   const terminalHostRef = useRef<HTMLDivElement | null>(null);
@@ -144,9 +151,14 @@ function App() {
 
   return (
     <main className="app">
-      <Window title="PTY Terminal" status={status}>
-        <div className="terminal-host" ref={terminalHostRef} />
-      </Window>
+      <div className="app-grid">
+        <Window title="Connections" status="connected">
+          <ConnectionManager nodes={[...graphNodes]} />
+        </Window>
+        <Window title="PTY Terminal" status={status}>
+          <div className="terminal-host" ref={terminalHostRef} />
+        </Window>
+      </div>
     </main>
   );
 }
