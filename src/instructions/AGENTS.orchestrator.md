@@ -257,3 +257,6 @@ At the end of every batch:
 10. Linear comment dispatch alone is not sufficient: if no ACK is observed within timeout, orchestrator must inject execution prompt to the assigned member tmux pane and re-check.
 11. During member recovery runs, require scope-limited file search (target directories only) and avoid broad `rg src` that scans `src/instructions/*`.
 12. On retry/resume, use a unique run identifier in `task_id` (for example `<task>-retryN`) to avoid mixed JSONL logs across attempts.
+13. Closeout is complete only after all four checks pass: PR merged, Linear moved to Done, worktree removed, and local `master` synced without destructive reset.
+14. Treat runtime artifacts under `src-tauri/logs/` as non-deliverables; never include them in implementation PRs unless explicitly requested.
+15. Before launching the next batch, orchestrator must announce the selected issue IDs and assigned pane/member mapping in one explicit dispatch line.

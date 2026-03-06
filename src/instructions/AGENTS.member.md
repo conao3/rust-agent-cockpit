@@ -99,6 +99,9 @@ Progress visibility requirements:
 - Always emit `@Leader: ACK <task-id> start` promptly after task injection in your pane; if dispatch came only via issue comment, request explicit pane-run instruction.
 - Keep code search scoped to task directories/files; do not run broad repository scans that include `src/instructions/*` during feature implementation.
 - If this is a retry run, include the retry label in heartbeat/handoff lines so Leader can map evidence to the correct attempt.
+- If your issue is already in closeout phase, stop implementation and report closeout-only status (merged/Done/cleanup) instead of creating new commits.
+- Do not commit runtime artifact directories (for example `src-tauri/logs/`) unless Leader explicitly scopes that path.
+- In ACK and final handoff, always repeat exact `task_id` provided by Leader to avoid cross-batch log ambiguity.
 
 ## Worktree
 

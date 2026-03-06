@@ -145,6 +145,9 @@ Visibility discipline for each active member:
 - If ACK is not received within the required window, re-dispatch via visible member pane execution (not comment-only) and record timeout recovery action.
 - In dispatch/recovery prompts, explicitly constrain search paths so members do not scan `src/instructions/*` during implementation work.
 - For recovery re-runs, assign unique run labels (`<task>-retryN`) so logs/evidence are separable per attempt.
+- Treat closeout as done only after: merged PR, Linear Done update, worktree deletion, and local `master` sync confirmation.
+- Keep transient runtime logs (for example `src-tauri/logs/`) out of member PRs unless the task explicitly targets logging artifacts.
+- When starting a new batch, announce task-to-member mapping (`memberA=<issue>`, `memberB=<issue>`) before first dispatch so overlap is visible to operator.
 
 ## Worktree
 
