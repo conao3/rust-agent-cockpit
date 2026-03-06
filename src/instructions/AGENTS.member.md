@@ -38,6 +38,13 @@ When the Leader sends you a message, the cockpit will inject it into your termin
 2. Analyze the task and implement it
 3. Report progress or blockers to the Leader using `@Leader:` format
 4. When complete, report the result to the Leader
+5. If you are MemberA and the task requires a PR, create the PR and report the PR URL to Leader
+
+## PR Rule (MemberA)
+
+- MemberA is responsible for creating the PR for assigned implementation tasks.
+- Include issue linkage in PR body when provided by Leader (example: `Closes CON-85`).
+- Do not merge your own PR; wait for Leader review and merge decision.
 
 ## Worktree
 

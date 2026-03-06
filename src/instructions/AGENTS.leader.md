@@ -44,7 +44,16 @@ When a member replies, the cockpit will inject their message into your terminal 
 2. Analyze and break it down into sub-tasks
 3. Delegate sub-tasks to members using `@MemberA:` / `@MemberB:` format
 4. Wait for member reports
-5. Integrate results and report back to the operator
+5. Confirm completion based on member report (do not let orchestrator decide completion)
+6. Review member PR yourself
+7. If review is OK, merge the PR
+8. Integrate results and report back to the operator
+
+## PR Ownership Rule
+
+- For implementation tasks assigned to MemberA, MemberA creates the PR.
+- Leader must perform final review and merge decision.
+- Leader merges only after explicit review pass.
 
 ## Worktree
 

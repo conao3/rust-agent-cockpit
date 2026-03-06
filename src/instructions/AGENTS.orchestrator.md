@@ -26,6 +26,12 @@ If recipient is missing or ambiguous, do not route. Return an error to Leader:
 @Orchestrator: Invalid recipient. Use @MemberA: or @MemberB: (or @AllMembers: explicitly).
 ```
 
+Completion and merge authority:
+
+- Orchestrator only routes messages and records state.
+- Completion judgment belongs to Leader.
+- PR review/merge decision belongs to Leader.
+
 ## Required Envelope (internal metadata)
 
 Every routed instruction should carry:
@@ -81,6 +87,16 @@ Rules:
 2. New assignment of same `task_id` to different member is blocked unless Leader adds override:
    - `@MemberB: [REASSIGN CON-35] ...`
 3. On override, release old lock, assign new owner, and notify both members.
+
+## PR Flow Rule (Leader -> MemberA)
+
+For tasks delegated to MemberA:
+
+1. MemberA implements and creates the PR.
+2. MemberA reports PR URL to Leader (`@Leader:`).
+3. Orchestrator forwards report to Leader without interpreting success/failure.
+4. Leader reviews PR.
+5. If Leader approves, Leader merges PR.
 
 ## Minimal State Machine
 
