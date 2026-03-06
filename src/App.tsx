@@ -14,6 +14,12 @@ type PtyCreateResponse = {
   id: string;
 };
 
+type PtyCreateContext = {
+  cwd?: string;
+  taskId?: string;
+  member?: string;
+};
+
 type PtyOutputPayload =
   | string
   | {
@@ -36,6 +42,29 @@ const graphNodes = [
   { id: "member-b", label: "Member B" },
 ] as const;
 
+const firstNonEmpty = (...values: Array<string | null>): string | undefined => {
+  for (const value of values) {
+    if (value) {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+  }
+  return undefined;
+};
+
+export const resolvePtyCreateContext = (search: string): PtyCreateContext => {
+  const params = new URLSearchParams(search);
+  const taskId = firstNonEmpty(params.get("task_id"), params.get("taskId"));
+  const member = firstNonEmpty(params.get("member"), params.get("agent"));
+  const cwd = firstNonEmpty(params.get("cwd"));
+  return {
+    cwd,
+    taskId,
+    member,
+  };
+};
 type WindowId = "connections" | "terminal";
 
 type ManagedWindow = {
@@ -71,7 +100,6 @@ const initialWindows: ManagedWindow[] = [
     height: 440,
   },
 ];
-
 function App() {
   const desktopRef = useRef<HTMLDivElement | null>(null);
   const terminalHostRef = useRef<HTMLDivElement | null>(null);
@@ -196,10 +224,14 @@ function App() {
 
     const bootstrap = async () => {
       try {
+        const context = resolvePtyCreateContext(window.location.search);
         const { id } = await invoke<PtyCreateResponse>("pty_create", {
           req: {
             cols: terminal.cols,
             rows: terminal.rows,
+            cwd: context.cwd,
+            task_id: context.taskId,
+            member: context.member,
           },
         });
         ptyIdRef.current = id;
