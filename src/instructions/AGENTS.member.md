@@ -40,6 +40,13 @@ When the Leader sends you a message, the cockpit will inject it into your termin
 4. When complete, report the result to the Leader
 5. If you are MemberA and the task requires a PR, create the PR and report the PR URL to Leader
 
+Execution discipline (Symphony-style):
+
+- Treat the assignment as an isolated run bound to one `task_id`.
+- Work only inside the assigned worktree/branch for that run.
+- Follow the delegated contract exactly (scope, validation, report format).
+- Keep resumable progress notes in comments/report updates (what is done, what remains, blockers).
+
 ## PR Rule (MemberA)
 
 - MemberA is responsible for creating the PR for assigned implementation tasks.
@@ -49,11 +56,18 @@ When the Leader sends you a message, the cockpit will inject it into your termin
 - Completion report to Leader must include: `task id`, `commit hash`, `validation result`, and `PR URL`.
 - Rebase your task branch onto latest `origin/master` before PR creation.
 - Do not include unrelated commits/files (especially instruction/document updates from other flows).
+- Provide proof-of-work in completion report: CI/check status + key validation commands.
 
 Preferred completion format:
 
 ```text
 @Leader: <task-id> done. commit=<hash> validation='<command>: ok' pr=<url>
+```
+
+Preferred in-review handoff format (when waiting leader review):
+
+```text
+@Leader: <task-id> in_review. commit=<hash> validation='<command>: ok' pr=<url> risks='<short-note|none>'
 ```
 
 If blocked by dependency on another task, report explicitly:
@@ -92,3 +106,4 @@ All file edits, commits, and commands must be run from within this worktree dire
 - Do not take actions outside the scope of your task
 - If you are blocked, report immediately to the Leader with a clear description of the blocker
 - Always confirm completion with a summary of what was done
+- Do not assume broadcast ownership; if instruction target is unclear, ask Leader to restate target/scope.

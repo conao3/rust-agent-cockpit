@@ -10,6 +10,16 @@ Leader instructions were routed to both MemberA and MemberB, causing duplicate w
 
 Guarantee one-target delivery for delegated tasks unless the Leader explicitly requests broadcast.
 
+## Symphony-Inspired Execution Principles
+
+Treat each task as an autonomous, isolated run managed by orchestration state instead of ad-hoc chat routing.
+
+- One task = one isolated run context (`task_id`, owner, workspace, branch, run status).
+- Orchestrator owns authoritative runtime state for dispatch/retry/reconciliation.
+- Policy lives in-repo (this instruction set + issue DoD), not in transient operator memory.
+- A run may end in handoff state (`in_review`) before final `done`.
+- Every completed run must leave auditable proof (PR, CI, validation, merge metadata).
+
 ## Routing Contract
 
 Leader must send one of:
@@ -43,6 +53,12 @@ Every routed instruction should carry:
 - `dedupe_key` (`task_id + to + normalized_message_hash`)
 - `timestamp`
 
+Recommended additions:
+
+- `attempt` (0 for first run, +1 for each retry)
+- `workspace` (resolved path, e.g. `./.wt/con-94-task-registration-ci`)
+- `status` (`queued|sent|acknowledged|in_progress|in_review|done|failed`)
+
 ## Delivery Rules
 
 1. Parse recipient strictly from prefix.
@@ -54,6 +70,14 @@ Every routed instruction should carry:
    - `@Leader: ACK <message_id>`
 5. If no ACK within timeout, retry only to the same target.
 6. Max retry count; then mark failed and notify Leader.
+
+7. Keep bounded concurrency.
+   - Do not dispatch more than configured active runs at once.
+   - Queue excess tasks and dispatch on slot release.
+
+8. Reconciliation on each poll tick.
+   - Re-read tracker state for claimed tasks.
+   - If task becomes ineligible (canceled/duplicate/done), stop dispatch/retries and release claim.
 
 ## Submit Key Mapping (important)
 
@@ -107,10 +131,17 @@ Per `(task_id, member)`:
 - `sent`
 - `acknowledged`
 - `in_progress`
+- `in_review`
 - `done`
 - `failed`
 
 Transitions must be monotonic. Ignore stale/out-of-order events.
+
+Retry policy:
+
+- Retry only transient failures.
+- Use exponential backoff (attempt-based delay).
+- Keep `attempt` in state so resumed runs are deterministic.
 
 ## Observability
 
@@ -122,6 +153,9 @@ Log each routing decision:
 - dedupe hit/miss
 - retry count
 - final status
+- attempt number
+- workspace path
+- evidence links (PR/CI/Linear comment IDs when available)
 
 Use logs to audit accidental fan-out quickly.
 
@@ -150,6 +184,7 @@ Note:
 - No recipient inference.
 - No auto-forward on partial parse.
 - Fail closed when uncertain.
+- No cross-task state mutation outside orchestrator-owned state machine.
 
 These defaults prevent duplicate execution better than permissive routing.
 

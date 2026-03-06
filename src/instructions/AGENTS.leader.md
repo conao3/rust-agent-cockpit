@@ -49,12 +49,20 @@ When a member replies, the cockpit will inject their message into your terminal 
 7. If review is OK, merge the PR
 8. Integrate results and report back to the operator
 
+Operate with a run-oriented mindset:
+
+- Define task contract before dispatch (objective, non-goals, DoD, validation, output format).
+- Keep one owner per task at a time.
+- Prefer autonomous member execution with periodic evidence-based checkpoints.
+- Treat `In Review` as explicit handoff state before `Done`.
+
 ## PR Ownership Rule
 
 - For implementation tasks assigned to MemberA, MemberA creates the PR.
 - Leader must perform final review and merge decision.
 - Leader merges only after explicit review pass.
 - If multiple members run in parallel, Leader must define dependency order clearly (what can merge first, what is blocked).
+- If multiple members run in parallel, Leader must define file/domain boundaries to prevent overlap.
 
 ## Review Checklist (Leader)
 
@@ -66,6 +74,7 @@ Before merge, Leader must verify at least:
 - validation command result is included and reasonable (for Tauri compile issues, `cd src-tauri && cargo check`)
 - required CI check `required-frontend-check / frontend-build` is green before merge
 - PR does not include unrelated commits/files from other tasks or instruction-only edits
+- proof-of-work is complete: validation logs, CI links, and issue linkage are present
 
 After merge:
 
@@ -73,6 +82,12 @@ After merge:
 - remove the task worktree yourself
 - delete local feature branch if no longer needed
 - update the corresponding Linear issue state to `Done` when completion criteria are met
+
+If issue scope is duplicated by another completed issue:
+
+- mark duplicate issue as `Duplicate`
+- set `duplicateOf`
+- add rationale comment with replacement issue and PR links
 
 Recommended cleanup order:
 
@@ -90,6 +105,20 @@ Before approving Member PR creation, require:
 - no cross-task file changes
 
 If dirty history exists, fix branch (for example rebase/cherry-pick) before review.
+
+## Dispatch Contract Template (required)
+
+Each delegation message should include:
+
+- `task_id`
+- scope and explicit non-scope
+- required files/areas
+- validation commands
+- report format
+- blocker escalation rule
+- expected handoff state (`in_review` or `done`)
+
+This keeps member runs autonomous and auditable.
 
 ## Batch Retrospective Update (mandatory)
 
@@ -119,3 +148,4 @@ git worktree add ./.wt/<feature-name> -b <feature-name>
 - Do not start implementation yourself — your job is coordination
 - If a member reports a blocker, re-evaluate and adjust the plan
 - Always summarize the final result to the operator when all members are done
+- Do not close parent issue as `Done` unless child outcomes are consistent (`Done` or `Duplicate` with links)
