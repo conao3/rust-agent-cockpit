@@ -123,6 +123,41 @@ body {
   box-sizing: border-box;
 }
 
+.connection-graph {
+  height: 220px;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #030712;
+}
+
+.connection-graph .react-flow__node {
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #111827;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.connection-graph .react-flow__edge-path {
+  stroke: #22d3ee;
+  stroke-width: 2;
+}
+
+.connection-graph .react-flow__edge-textbg {
+  fill: #111827;
+}
+
+.connection-graph .react-flow__edge-text {
+  fill: #cbd5e1;
+  font-size: 11px;
+}
+
+.connection-graph .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid #334155;
+}
+
 .connection-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1,4 +1,12 @@
 import { useReducer, type ChangeEvent, type FormEvent } from "react";
+import ReactFlow, {
+  Background,
+  Controls,
+  MarkerType,
+  type Edge,
+  type Node,
+} from "reactflow";
+import "reactflow/dist/style.css";
 
 type GraphNode = {
   id: string;
@@ -64,6 +72,42 @@ const initialState: State = {
   editingId: null,
   error: null,
 };
+
+const nodePositions = [
+  { x: 160, y: 40 },
+  { x: 40, y: 220 },
+  { x: 280, y: 220 },
+];
+
+const fallbackNodePosition = { x: 160, y: 130 };
+
+export function buildFlowNodes(nodes: GraphNode[]): Node[] {
+  return nodes.map((node, index) => ({
+    id: node.id,
+    type: "default",
+    position: nodePositions[index] ?? fallbackNodePosition,
+    data: {
+      label: node.label,
+    },
+    draggable: false,
+    selectable: false,
+  }));
+}
+
+export function buildFlowEdges(connections: Connection[]): Edge[] {
+  return connections.map((connection) => ({
+    id: connection.id,
+    source: connection.fromId,
+    target: connection.toId,
+    type: "smoothstep",
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+    },
+    animated: true,
+    label: connection.description || undefined,
+    selectable: false,
+  }));
+}
 
 function validateDraft(state: State): string | null {
   const { fromId, toId } = state.draft;
@@ -193,6 +237,8 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
 
   const idToLabel = new Map(nodes.map((node) => [node.id, node.label] as const));
   const submitLabel = state.editingId ? "save connection" : "add connection";
+  const flowNodes = buildFlowNodes(nodes);
+  const flowEdges = buildFlowEdges(state.connections);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -210,6 +256,21 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
 
   return (
     <div className="connection-manager">
+      <div className="connection-graph" aria-label="connection graph" data-testid="connection-graph">
+        <ReactFlow
+          fitView
+          nodes={flowNodes}
+          edges={flowEdges}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
+
       <form className="connection-form" onSubmit={handleSubmit}>
         <label className="connection-field">
           source
