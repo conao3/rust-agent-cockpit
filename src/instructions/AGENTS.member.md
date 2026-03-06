@@ -107,6 +107,8 @@ Progress visibility requirements:
 - If ACK was missed due to dispatch path mismatch, prioritize immediate ACK + current step summary before additional implementation work.
 - Keep branch history task-pure before PR handoff; if unrelated commits are present, rebase/reset and report cleaned commit hash in final handoff.
 - When CI is still pending after PR creation, report current check states to Leader and wait for review/closeout instruction instead of assuming completion.
+- If Leader requests a rebase/merge from `master` during review, re-run required validation and update the final handoff with refreshed evidence.
+- If merge conflict is resolved on your branch, include a short conflict-resolution note in the handoff so Leader can audit scope safety quickly.
 
 ## Worktree
 

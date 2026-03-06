@@ -265,3 +265,5 @@ At the end of every batch:
 18. If member ACK is missing after comment dispatch, escalate immediately to explicit pane-run injection; do not wait for heartbeat window to expire.
 19. If an implementation PR is contaminated by unrelated commits, require branch reconstitution (`origin/master` baseline + task commits only) before in_review acceptance.
 20. For closeout eligibility, if required CI checks are pending, keep issue in `In Review` and re-check before merge instead of forcing close.
+21. During closeout, if PR head needs `master` updates or conflict resolution, require post-update CI re-run to green before merge.
+22. Treat `gh pr review --approve` failure on self-authored PR as expected platform behavior; proceed with manual review notes plus merge decision evidence.

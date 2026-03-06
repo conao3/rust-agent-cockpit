@@ -153,6 +153,8 @@ Visibility discipline for each active member:
 - If member ACK is absent after issue-comment dispatch, re-inject task directly in the member pane and record the recovery action in operator heartbeat.
 - If PR includes unrelated commits/files, clean branch history (rebase/reset/cherry-pick) before accepting `in_review`.
 - Do not merge while required checks are pending; continue heartbeat updates and close only after required CI is green.
+- If merge is blocked by base drift/conflict, update branch, resolve conflict, and require fresh green required checks before merge.
+- When reviewer identity equals PR author and GitHub blocks approval, record explicit manual review result in issue/comment and continue with merge gate checks.
 
 ## Worktree
 
