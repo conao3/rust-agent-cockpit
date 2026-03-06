@@ -95,6 +95,7 @@ Progress visibility requirements:
 - If Leader assigns a task that already has an active PR for your branch/issue, report that PR immediately and ask whether to continue as rework or closeout support.
 - Keep startup reads silent (`cat ... >/dev/null`) and avoid printing full memory file contents to task logs.
 - Do not include `src/instructions/*` changes in implementation PRs unless Leader explicitly requests instruction updates for that task.
+- Startup-file reads are mandatory but must stay silent; do not print SOUL/IDENTITY/MEMORY contents in task output.
 
 ## Worktree
 

@@ -253,3 +253,4 @@ At the end of every batch:
 6. Enforce silent startup reads for member runs (`cat ... >/dev/null`); do not emit full memory file contents into run logs.
 7. For parallel dispatch, prefer domain-separated pairings (for example frontend + backend) to reduce overlap risk.
 8. Reject member handoff if PR includes unrelated `src/instructions/*` changes unless the assignment explicitly required instruction updates.
+9. Treat startup-read log dumps as protocol violation: startup reads must be silent (`>/dev/null`) and must not print memory contents.

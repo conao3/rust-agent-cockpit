@@ -141,6 +141,7 @@ Visibility discipline for each active member:
 - Prefer frontend/backend-separated task pairing for parallel runs when possible.
 - Require startup memory reads to be silent (no full file dumps in logs), then begin ACK/heartbeat flow.
 - If an implementation PR contains unrelated `src/instructions/*` edits, request member cleanup/rebase before merge.
+- Enforce startup-read silence strictly: no `cat/sed` dump of memory files to visible logs; require redirect to `/dev/null`.
 
 ## Worktree
 
