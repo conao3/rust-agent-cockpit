@@ -104,6 +104,9 @@ Progress visibility requirements:
 - In ACK and final handoff, always repeat exact `task_id` provided by Leader to avoid cross-batch log ambiguity.
 - If Leader restarts or re-injects a command after pane/input recovery, ACK again with the same `task_id` so run evidence remains contiguous.
 - Treat "dispatch sent" as non-start state; begin coding only after explicit task injection and then emit `@Leader: ACK <task-id> start`.
+- If ACK was missed due to dispatch path mismatch, prioritize immediate ACK + current step summary before additional implementation work.
+- Keep branch history task-pure before PR handoff; if unrelated commits are present, rebase/reset and report cleaned commit hash in final handoff.
+- When CI is still pending after PR creation, report current check states to Leader and wait for review/closeout instruction instead of assuming completion.
 
 ## Worktree
 

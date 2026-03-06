@@ -262,3 +262,6 @@ At the end of every batch:
 15. Before launching the next batch, orchestrator must announce the selected issue IDs and assigned pane/member mapping in one explicit dispatch line.
 16. Before sending any run command to tmux, reset pane input state first (`C-c` then fresh command) to prevent accidental command concatenation.
 17. After run launch, verify startup evidence (`task_id:` and `log:` lines, then `thread.started`) before declaring batch started.
+18. If member ACK is missing after comment dispatch, escalate immediately to explicit pane-run injection; do not wait for heartbeat window to expire.
+19. If an implementation PR is contaminated by unrelated commits, require branch reconstitution (`origin/master` baseline + task commits only) before in_review acceptance.
+20. For closeout eligibility, if required CI checks are pending, keep issue in `In Review` and re-check before merge instead of forcing close.

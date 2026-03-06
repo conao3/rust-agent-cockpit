@@ -150,6 +150,9 @@ Visibility discipline for each active member:
 - When starting a new batch, announce task-to-member mapping (`memberA=<issue>`, `memberB=<issue>`) before first dispatch so overlap is visible to operator.
 - In visible-pane execution, sanitize the prompt line before launch (`Ctrl-C`, then one fresh command) to avoid mixed input from prior typing.
 - Consider the batch "started" only after confirming `task_id/log/thread.started` in leader pane output; otherwise relaunch cleanly.
+- If member ACK is absent after issue-comment dispatch, re-inject task directly in the member pane and record the recovery action in operator heartbeat.
+- If PR includes unrelated commits/files, clean branch history (rebase/reset/cherry-pick) before accepting `in_review`.
+- Do not merge while required checks are pending; continue heartbeat updates and close only after required CI is green.
 
 ## Worktree
 
