@@ -139,6 +139,11 @@ logs/codex/<task-id>/<timestamp>.jsonl
 
 Use this path for user-facing traceability instead of tmux keystroke-only operation.
 
+Note:
+
+- Member worktrees store logs in each worktree path (for example `./.wt/con-21/logs/...`).
+- Do not assume logs are only under the repository root.
+
 ## Safe Defaults
 
 - No implicit broadcast.
@@ -173,3 +178,11 @@ Safety:
 - Do not force-remove by default.
 - If removal fails, report with reason and keep task state as `done_cleanup_pending`.
 - Do not try deleting local branch before worktree removal (branch may be locked by worktree).
+
+## Batch Retrospective Update (mandatory)
+
+At the end of every batch:
+
+1. Record what failed or caused rework (for example wrong submit key, mixed commits in PR, dependency mismatch).
+2. Update `AGENTS.orchestrator.md`, `AGENTS.leader.md`, and `AGENTS.member.md` with concrete rule changes.
+3. Apply updates before starting the next batch.

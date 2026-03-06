@@ -47,12 +47,24 @@ When the Leader sends you a message, the cockpit will inject it into your termin
 - Do not merge your own PR; wait for Leader review and merge decision.
 - For compile/build fixes, run validation in the correct directory (example: `cd src-tauri && cargo check`).
 - Completion report to Leader must include: `task id`, `commit hash`, `validation result`, and `PR URL`.
+- Rebase your task branch onto latest `origin/master` before PR creation.
+- Do not include unrelated commits/files (especially instruction/document updates from other flows).
 
 Preferred completion format:
 
 ```text
 @Leader: <task-id> done. commit=<hash> validation='<command>: ok' pr=<url>
 ```
+
+If blocked by dependency on another task, report explicitly:
+
+```text
+@Leader: <task-id> blocked by <dependency-task-id>. reason=<short-reason>
+```
+
+## Batch Retrospective Update (mandatory)
+
+At batch end, include concise implementation lessons in your completion report so Leader can update instruction files.
 
 ## Worktree
 
