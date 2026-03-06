@@ -40,6 +40,7 @@ struct MonitoringManager {
 #[derive(Default)]
 struct MonitoringState {
     task_states: HashMap<String, TaskLifecycleRecord>,
+    task_definitions: HashMap<String, TaskDefinitionRecord>,
     seen_event_keys: HashSet<String>,
 }
 
@@ -51,6 +52,12 @@ struct TaskLifecycleRecord {
     last_event_id: Option<String>,
     updated_at_ms: u64,
     history_len: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct TaskDefinitionRecord {
+    title: Option<String>,
+    dedupe_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,6 +155,46 @@ struct LifecycleStateResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct TaskRegistrationRequest {
+    task_id: String,
+    member: String,
+    title: Option<String>,
+    dedupe_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskLifecycleTransitionRequest {
+    task_id: String,
+    member: String,
+    state: TaskLifecycleState,
+    message_id: Option<String>,
+    dedupe_key: Option<String>,
+    source: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskLifecycleLookupRequest {
+    task_id: String,
+    member: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct TaskLifecycleSnapshot {
+    task_id: String,
+    member: String,
+    title: Option<String>,
+    dedupe_key: Option<String>,
+    state: Option<TaskLifecycleState>,
+    last_event_id: Option<String>,
+    updated_at_ms: Option<u64>,
+    history_len: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PtyCreateRequest {
     cols: u16,
     rows: u16,
@@ -214,6 +261,42 @@ fn lifecycle_key(task_id: &str, member: &str) -> String {
     format!("{}::{}", task_id.trim(), member.trim())
 }
 
+fn validate_monitoring_identity(task_id: &str, member: &str) -> Result<(), String> {
+    if task_id.trim().is_empty() {
+        return Err("task_id must not be empty".to_string());
+    }
+    if member.trim().is_empty() {
+        return Err("member must not be empty".to_string());
+    }
+    Ok(())
+}
+
+fn is_valid_registered_transition(from: Option<TaskLifecycleState>, to: TaskLifecycleState) -> bool {
+    match from {
+        None => matches!(to, TaskLifecycleState::Sent | TaskLifecycleState::Failed),
+        Some(TaskLifecycleState::Sent) => {
+            matches!(
+                to,
+                TaskLifecycleState::Sent | TaskLifecycleState::Ack | TaskLifecycleState::Failed
+            )
+        }
+        Some(TaskLifecycleState::Ack) => {
+            matches!(
+                to,
+                TaskLifecycleState::Ack | TaskLifecycleState::InProgress | TaskLifecycleState::Failed
+            )
+        }
+        Some(TaskLifecycleState::InProgress) => {
+            matches!(
+                to,
+                TaskLifecycleState::InProgress | TaskLifecycleState::Done | TaskLifecycleState::Failed
+            )
+        }
+        Some(TaskLifecycleState::Done) => matches!(to, TaskLifecycleState::Done),
+        Some(TaskLifecycleState::Failed) => matches!(to, TaskLifecycleState::Failed),
+    }
+}
+
 #[cfg(not(test))]
 fn log_monitoring_event(value: serde_json::Value) {
     eprintln!("[monitoring] {}", value);
@@ -232,6 +315,128 @@ fn log_monitoring_event(value: serde_json::Value) {
 fn log_monitoring_event(_value: serde_json::Value) {}
 
 impl MonitoringState {
+    fn register_definition(
+        &mut self,
+        req: TaskRegistrationRequest,
+    ) -> Result<TaskLifecycleSnapshot, String> {
+        validate_monitoring_identity(&req.task_id, &req.member)?;
+        let key = lifecycle_key(&req.task_id, &req.member);
+        let definition = self.task_definitions.entry(key.clone()).or_default();
+
+        if req.title.is_some() {
+            definition.title = req.title;
+        }
+        if req.dedupe_key.is_some() {
+            definition.dedupe_key = req.dedupe_key;
+        }
+
+        let lifecycle = self.task_states.get(&key);
+        Ok(TaskLifecycleSnapshot {
+            task_id: req.task_id.trim().to_string(),
+            member: req.member.trim().to_string(),
+            title: definition.title.clone(),
+            dedupe_key: definition.dedupe_key.clone(),
+            state: lifecycle.map(|record| record.state),
+            last_event_id: lifecycle.and_then(|record| record.last_event_id.clone()),
+            updated_at_ms: lifecycle.map(|record| record.updated_at_ms),
+            history_len: lifecycle.map_or(0, |record| record.history_len),
+        })
+    }
+
+    fn transition_registered(
+        &mut self,
+        req: TaskLifecycleTransitionRequest,
+        now: u64,
+    ) -> Result<TaskLifecycleSnapshot, String> {
+        validate_monitoring_identity(&req.task_id, &req.member)?;
+        let task_id = req.task_id.trim().to_string();
+        let member = req.member.trim().to_string();
+        let key = lifecycle_key(&task_id, &member);
+        let definition = self.task_definitions.get(&key).cloned().ok_or_else(|| {
+            format!(
+                "task registration not found for task_id={} member={}",
+                task_id, member
+            )
+        })?;
+
+        let current_state = self.task_states.get(&key).map(|record| record.state);
+        if !is_valid_registered_transition(current_state, req.state) {
+            return Err(format!(
+                "invalid lifecycle transition for task_id={} member={} to {:?}",
+                task_id, member, req.state
+            ));
+        }
+
+        let dedupe_key = req
+            .dedupe_key
+            .clone()
+            .or_else(|| {
+                definition
+                    .dedupe_key
+                    .as_ref()
+                    .map(|base| format!("{base}:{:?}:{now}", req.state))
+            });
+        let message_id = req.message_id.clone().or_else(|| dedupe_key.clone());
+        let response = self.ingest(
+            LifecycleIngestRequest {
+                task_id: task_id.clone(),
+                member: member.clone(),
+                state: req.state,
+                message_id,
+                dedupe_key,
+                source: req.source,
+            },
+            now,
+        );
+
+        if response.decision == LifecycleDecision::Stale {
+            return Err(format!(
+                "invalid lifecycle transition for task_id={} member={} to {:?}",
+                task_id, member, req.state
+            ));
+        }
+
+        let lifecycle = self.task_states.get(&key);
+        Ok(TaskLifecycleSnapshot {
+            task_id,
+            member,
+            title: definition.title.clone(),
+            dedupe_key: definition.dedupe_key.clone(),
+            state: lifecycle.map(|record| record.state),
+            last_event_id: lifecycle.and_then(|record| record.last_event_id.clone()),
+            updated_at_ms: lifecycle.map(|record| record.updated_at_ms),
+            history_len: lifecycle.map_or(0, |record| record.history_len),
+        })
+    }
+
+    fn get_registered_lifecycle(
+        &self,
+        req: TaskLifecycleLookupRequest,
+    ) -> Result<TaskLifecycleSnapshot, String> {
+        validate_monitoring_identity(&req.task_id, &req.member)?;
+        let task_id = req.task_id.trim().to_string();
+        let member = req.member.trim().to_string();
+        let key = lifecycle_key(&task_id, &member);
+        let definition = self.task_definitions.get(&key).ok_or_else(|| {
+            format!(
+                "task registration not found for task_id={} member={}",
+                task_id, member
+            )
+        })?;
+        let lifecycle = self.task_states.get(&key);
+
+        Ok(TaskLifecycleSnapshot {
+            task_id,
+            member,
+            title: definition.title.clone(),
+            dedupe_key: definition.dedupe_key.clone(),
+            state: lifecycle.map(|record| record.state),
+            last_event_id: lifecycle.and_then(|record| record.last_event_id.clone()),
+            updated_at_ms: lifecycle.map(|record| record.updated_at_ms),
+            history_len: lifecycle.map_or(0, |record| record.history_len),
+        })
+    }
+
     fn ingest(&mut self, req: LifecycleIngestRequest, now: u64) -> LifecycleIngestResponse {
         let event_key = req.event_key();
         let key = lifecycle_key(&req.task_id, &req.member);
@@ -482,6 +687,42 @@ fn monitoring_get_lifecycle_state(
     Ok(state.get_state(&req.task_id, &req.member))
 }
 
+#[tauri::command]
+fn task_register_definition(
+    manager: State<'_, MonitoringManager>,
+    req: TaskRegistrationRequest,
+) -> Result<TaskLifecycleSnapshot, String> {
+    let mut state = manager
+        .state
+        .lock()
+        .map_err(|_| "failed to lock monitoring state".to_string())?;
+    state.register_definition(req)
+}
+
+#[tauri::command]
+fn task_transition_lifecycle(
+    manager: State<'_, MonitoringManager>,
+    req: TaskLifecycleTransitionRequest,
+) -> Result<TaskLifecycleSnapshot, String> {
+    let mut state = manager
+        .state
+        .lock()
+        .map_err(|_| "failed to lock monitoring state".to_string())?;
+    state.transition_registered(req, now_millis())
+}
+
+#[tauri::command]
+fn task_get_lifecycle(
+    manager: State<'_, MonitoringManager>,
+    req: TaskLifecycleLookupRequest,
+) -> Result<TaskLifecycleSnapshot, String> {
+    let state = manager
+        .state
+        .lock()
+        .map_err(|_| "failed to lock monitoring state".to_string())?;
+    state.get_registered_lifecycle(req)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -495,7 +736,10 @@ pub fn run() {
             pty_resize,
             pty_close,
             monitoring_ingest_lifecycle_event,
-            monitoring_get_lifecycle_state
+            monitoring_get_lifecycle_state,
+            task_register_definition,
+            task_transition_lifecycle,
+            task_get_lifecycle
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -639,5 +883,127 @@ mod tests {
             .expect("state should exist");
         assert_eq!(record.state, TaskLifecycleState::Done);
         assert_eq!(record.history_len, 3);
+    }
+
+    fn registration_req() -> TaskRegistrationRequest {
+        TaskRegistrationRequest {
+            task_id: "CON-94".to_string(),
+            member: "MemberB".to_string(),
+            title: Some("Task definition".to_string()),
+            dedupe_key: Some("CON-94:MemberB".to_string()),
+        }
+    }
+
+    #[test]
+    fn registration_starts_without_lifecycle_state() {
+        let mut monitoring = MonitoringState::default();
+        let snapshot = monitoring.register_definition(registration_req()).unwrap();
+
+        assert_eq!(snapshot.state, None);
+        assert_eq!(snapshot.history_len, 0);
+        assert_eq!(snapshot.title.as_deref(), Some("Task definition"));
+    }
+
+    #[test]
+    fn registered_lifecycle_accepts_monotonic_progression() {
+        let mut monitoring = MonitoringState::default();
+        monitoring.register_definition(registration_req()).unwrap();
+
+        for state in [
+            TaskLifecycleState::Sent,
+            TaskLifecycleState::Ack,
+            TaskLifecycleState::InProgress,
+            TaskLifecycleState::Done,
+        ] {
+            let snapshot = monitoring
+                .transition_registered(
+                    TaskLifecycleTransitionRequest {
+                        task_id: "CON-94".to_string(),
+                        member: "MemberB".to_string(),
+                        state,
+                        message_id: None,
+                        dedupe_key: None,
+                        source: Some("test".to_string()),
+                    },
+                    now_millis(),
+                )
+                .unwrap();
+            assert_eq!(snapshot.state, Some(state));
+        }
+    }
+
+    #[test]
+    fn registered_lifecycle_rejects_out_of_order_transition() {
+        let mut monitoring = MonitoringState::default();
+        monitoring.register_definition(registration_req()).unwrap();
+
+        let err = monitoring
+            .transition_registered(
+                TaskLifecycleTransitionRequest {
+                    task_id: "CON-94".to_string(),
+                    member: "MemberB".to_string(),
+                    state: TaskLifecycleState::Done,
+                    message_id: None,
+                    dedupe_key: None,
+                    source: Some("test".to_string()),
+                },
+                now_millis(),
+            )
+            .unwrap_err();
+        assert!(err.contains("invalid lifecycle transition"));
+    }
+
+    #[test]
+    fn registered_lifecycle_rejects_transition_from_terminal_state() {
+        let mut monitoring = MonitoringState::default();
+        monitoring.register_definition(registration_req()).unwrap();
+        for state in [
+            TaskLifecycleState::Sent,
+            TaskLifecycleState::Ack,
+            TaskLifecycleState::InProgress,
+            TaskLifecycleState::Done,
+        ] {
+            monitoring
+                .transition_registered(
+                    TaskLifecycleTransitionRequest {
+                        task_id: "CON-94".to_string(),
+                        member: "MemberB".to_string(),
+                        state,
+                        message_id: None,
+                        dedupe_key: None,
+                        source: Some("test".to_string()),
+                    },
+                    now_millis(),
+                )
+                .unwrap();
+        }
+
+        let err = monitoring
+            .transition_registered(
+                TaskLifecycleTransitionRequest {
+                    task_id: "CON-94".to_string(),
+                    member: "MemberB".to_string(),
+                    state: TaskLifecycleState::Sent,
+                    message_id: None,
+                    dedupe_key: None,
+                    source: Some("test".to_string()),
+                },
+                now_millis(),
+            )
+            .unwrap_err();
+        assert!(err.contains("invalid lifecycle transition"));
+    }
+
+    #[test]
+    fn registered_lifecycle_lookup_fails_for_unknown_task() {
+        let monitoring = MonitoringState::default();
+        let err = monitoring
+            .get_registered_lifecycle(TaskLifecycleLookupRequest {
+                task_id: "CON-94".to_string(),
+                member: "MemberB".to_string(),
+            })
+            .unwrap_err();
+
+        assert!(err.contains("task registration not found"));
     }
 }
