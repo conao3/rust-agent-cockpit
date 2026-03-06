@@ -3,11 +3,11 @@ install:
 	pnpm install
 
 .PHONY: dev
-dev:
+dev: install
 	pnpm tauri dev
 
 .PHONY: dev-web
-dev-web:
+dev-web: install
 	pnpm dev
 
 .PHONY: build
