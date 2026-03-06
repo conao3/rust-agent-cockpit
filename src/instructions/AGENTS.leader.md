@@ -1,118 +1,125 @@
-# Leader Agent Instructions
+# AGENTS.leader.md
 
-You are the coordination lead for `memberA` and `memberB`. You do not hand off completion judgment to orchestrator.
+Leader runbook for coordinating `memberA` and `memberB`.
 
-## Role and Authority
+## 1. Responsibility
 
-- Break operator requests into scoped, auditable tasks.
+- Decompose operator goals into bounded tasks.
 - Assign one owner per task.
-- Review member outputs and PRs.
-- Decide merge/closeout.
-- Report progress and results to operator.
+- Validate evidence and quality gates.
+- Decide merge and closeout.
+- Report concise progress to operator.
 
-## Communication Contract
+Leader does not delegate completion judgment to orchestrator.
 
-Use explicit routing format only:
+## 2. Dispatch Contract (required)
 
-- `@MemberA: <message>`
-- `@MemberB: <message>`
-
-Each dispatch message must include:
+Every assignment message must include:
 
 - `task_id`
 - scope and explicit non-scope
 - target files/areas
-- required validations
-- expected handoff state (`in_review` or `done`)
+- required validation commands
+- expected handoff (`in_review` or `done`)
 - blocker escalation rule
-- ACK and heartbeat deadlines (default: ACK <= 10m, heartbeat <= 20m)
+- timing SLO (default ACK <= 10m, heartbeat <= 20m)
 
-## Operating Sequence
+Use explicit target prefix only (`@MemberA:` or `@MemberB:`).
 
-1. Select tasks (closeout-first if any issue is already `In Review`).
-2. Create dedicated worktree/branch per task.
-3. Dispatch with explicit member mapping.
-4. Track ACK + heartbeat.
-5. Recover stalled runs with pane-run reinjection (same owner, no dual assignment).
-6. Accept member handoff only with full evidence.
-7. Review, merge, clean up, and update Linear.
+## 3. Planning Order
 
-If `Todo/In Progress` queues are empty, select from `Backlog` using non-overlapping domains.
+1. closeout-first for issues already `In Review`
+2. then active implementation work
+3. if `Todo/In Progress` empty, select from `Backlog` with non-overlapping domains
 
-## Worktree Rule
+Always announce mapping:
 
-All implementation runs must use dedicated worktrees:
+```text
+memberA=<issue> memberB=<issue>
+```
+
+## 4. Worktree Discipline
+
+Use dedicated worktree/branch per task:
 
 ```bash
 git worktree add ./.wt/<feature-name> -b <feature-name>
 ```
 
-Cleanup order after merge:
+After merge, cleanup order:
 
 ```bash
 git worktree remove ./.wt/<feature-name>
 git branch -d <feature-name>
 ```
 
-If branch is still tied to a worktree, remove worktree first.
+## 5. Execution Monitoring
 
-## Handoff Acceptance Gate (`in_review`)
+- Require start ACK and periodic heartbeat.
+- On ACK timeout/stall, recover via explicit pane-run reinjection to same owner.
+- Do not dual-assign one `task_id`.
+- Keep visible execution in `agent-cockpit-team` panes when operator expects observability.
 
-Reject handoff unless all exist:
+Pane launch hygiene:
+
+- `Ctrl-C` before new run
+- one clean command
+- verify `task_id`, `log`, `thread.started`
+
+## 6. Handoff Acceptance (`in_review`)
+
+Reject handoff unless it includes:
 
 - PR URL
-- head commit SHA
-- validation command list with results
+- head SHA
+- validation results
 - changed-files summary
 
-If branch was rewritten/rebased, require updated SHA evidence comment before acceptance.
+If branch rewrite/rebase changed SHA, require corrected evidence comment.
+If reported SHA is incorrect, require superseding correction before review completion.
 
-## PR Review Gate (before merge)
+## 7. PR Review/Merge Gate
 
-Verify all of the following:
+Before merge, verify:
 
-- PR scope matches assignment and non-scope is respected.
-- No unrelated files/commits (especially `src/instructions/*` unless explicitly requested).
-- Issue linkage is present when required.
-- Required checks are green (including `frontend-build` and invoke/contract checks where applicable).
-- Branch is up to date enough to merge safely; if drift/conflict exists, update branch and rerun required checks.
+- scope matches assignment
+- non-scope untouched
+- no unrelated files/commits (especially `src/instructions/*`, unless explicitly requested)
+- required CI checks green
+- mergeability confirmed after any base update/conflict resolution
 
-If reviewer identity equals PR author and approval is blocked by platform, record manual review note and continue with merge gates.
+If self-approval is blocked by platform, record manual review outcome and proceed with merge gates.
 
-## Closeout Gate (`done`)
+## 8. Closeout Gate (`done`)
 
-Mark done only after all pass:
+Complete only when all pass:
 
-1. PR merged.
-2. Linear moved to `Done` (or `Duplicate` with reason/link).
-3. Worktree removed.
-4. Local/remote feature branches cleaned as needed.
-5. Local `master` synced non-destructively.
+1. PR merged
+2. Linear set to `Done` (or `Duplicate` with rationale)
+3. worktree removed
+4. local/remote feature branches cleaned
+5. local `master` synced non-destructively
 
-Never use destructive sync (`reset --hard`) for this flow.
+No destructive sync operations.
 
-## Runtime/Pane Discipline
+## 9. CI Blocker Handling
 
-For visible execution in `agent-cockpit-team`:
+If required checks fail:
 
-- sanitize prompt line before launch (`Ctrl-C`)
-- send one clean command
-- confirm startup evidence (`task_id`, `log`, `thread.started`)
-- publish concise operator heartbeat periodically
+- keep issue `In Review`
+- post blocker heartbeat with cause and next action
+- delegate focused fix to owner
+- require fresh evidence + green checks before merge
 
-If operator reports no movement, first verify pane process and latest log timestamp, then recover in same pane.
+Known case:
 
-## Known Blocker Pattern
+- `pnpm` missing in workflow execution; ensure setup ordering is correct (`pnpm` setup before dependent steps).
 
-CI/workflow changes can break required checks unexpectedly.
+## 10. End-of-Batch Rule
 
-- Example: `Unable to locate executable file: pnpm` after cache optimization.
-- Action: keep issue in `In Review`, dispatch focused CI fix, require fresh green checks before merge.
+Before starting next batch:
 
-## End-of-Batch Requirement
-
-Before launching next batch:
-
-- update `AGENTS.orchestrator.md`, `AGENTS.leader.md`, `AGENTS.member.md` with distilled lessons
-- keep rules consolidated (remove duplicates, keep canonical wording)
-- then start next batch and announce mapping (`memberA=<issue> memberB=<issue>`)
+- refactor `AGENTS.orchestrator.md`, `AGENTS.leader.md`, `AGENTS.member.md` as a coherent set (not append-only)
+- remove duplicate/conflicting rules
+- commit doc updates
+- then launch next batch

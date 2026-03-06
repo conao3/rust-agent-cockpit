@@ -1,17 +1,17 @@
-# Member Agent Instructions
+# AGENTS.member.md
 
-You are an implementation agent (`memberA` or `memberB`) under Leader coordination.
+Member runbook for implementation tasks under Leader control.
 
-## Role
+## 1. Responsibility
 
-- Execute only assigned task scope.
-- Work in assigned worktree/branch.
-- Report status/evidence to Leader using strict format.
+- Execute only delegated scope.
+- Work only in assigned worktree/branch.
+- Provide timely status/evidence to Leader.
 - Do not merge PRs yourself.
 
-## Communication Contract
+## 2. Messaging Protocol
 
-Send messages to Leader only in this format:
+Use Leader-directed lines only:
 
 ```text
 @Leader: <message>
@@ -19,44 +19,43 @@ Send messages to Leader only in this format:
 
 Required lifecycle messages:
 
-- immediate start ACK: `@Leader: ACK <task-id> start`
-- periodic heartbeat (at least per contract window)
-- blocker report with reason
+- start ACK: `@Leader: ACK <task-id> start`
+- periodic heartbeat within contract window
+- blocker report with reason and last completed step
 - final handoff (`in_review` or `done`) with evidence
 
-If Leader re-injects/restarts your run, ACK again with the same `task_id`.
+If task is re-injected/restarted, ACK again with same `task_id`.
 
-## Worktree and Scope Discipline
+## 3. Scope and Hygiene
 
-- Use only assigned worktree (usually `./.wt/<feature-name>`).
-- Do not edit outside delegated scope.
-- Keep search and edits scoped to relevant paths.
-- Do not include `src/instructions/*` in implementation PRs unless Leader explicitly requests it.
-- Do not commit runtime artifact directories (e.g. `src-tauri/logs/`) unless explicitly requested.
+- Stay inside assigned files/areas.
+- Avoid broad repo scans when path-scoped search is enough.
+- Never include `src/instructions/*` in implementation PR unless explicitly requested.
+- Never commit runtime artifact dirs (e.g. `src-tauri/logs/`) unless requested.
 
-## PR and Branch Hygiene
+## 4. Branch and PR Hygiene
 
 Before final handoff:
 
-- ensure branch is task-pure (no unrelated commits/files)
-- sync/rebase as instructed by Leader
-- if branch was rewritten/rebased, report the updated head SHA
-- if conflict was resolved, include a short conflict note
+- ensure branch contains only task-relevant changes
+- rebase/update per Leader instruction
+- if rewrite/rebase changes head SHA, report updated SHA
+- if conflicts resolved, include short conflict note
 
-MemberA creates PR when assignment requires it and shares PR URL.
+MemberA creates PR when requested and shares URL promptly.
 
-## Evidence Requirements for `in_review`
+## 5. `in_review` Evidence Contract
 
 Final handoff must include:
 
 - `task_id`
 - PR URL
-- head commit SHA
-- validation commands executed + result
+- head SHA
+- validations run + result
 - changed-files summary
-- optional risks/blockers note
+- risks/blockers note (`none` if not applicable)
 
-Recommended format:
+Recommended:
 
 ```text
 @Leader: <task-id> in_review. commit=<sha> pr=<url> validation='<cmds: ok>' files='<summary>' risks='<none|...>'
@@ -65,29 +64,30 @@ Recommended format:
 If blocked:
 
 ```text
-@Leader: <task-id> blocked. reason=<short-reason> last_step=<what-was-done>
+@Leader: <task-id> blocked. reason=<short-reason> last_step=<summary>
 ```
 
-## Timing and Reliability
+## 6. Timing SLO
 
-Treat dispatch timing as strict SLO unless Leader states otherwise:
+Default unless overridden:
 
 - ACK <= 10 minutes
 - heartbeat <= 20 minutes
 
-If you cannot meet timing, report immediately.
-If process exits unexpectedly, send `failed_needs_resume` style report with last completed step.
+If SLO cannot be met, report immediately.
+If process exits unexpectedly, report `failed_needs_resume` with last completed step.
 
-## Validation Discipline
+## 7. Validation Discipline
 
-- Run the exact validations requested in task contract.
-- For review-time base updates (rebase/merge from `master`), rerun required validations.
-- If CI remains pending/failing after PR creation, report status and wait for Leader direction.
+- Run exact validations requested in dispatch contract.
+- After base update/rebase/conflict fix, rerun required validations.
+- If CI is pending/failing after PR, report status and wait for Leader direction.
 
-## Post-Handoff Rule
+## 8. Post-Handoff Behavior
 
-After `in_review` handoff, stop feature changes unless Leader explicitly requests follow-up fixes.
+After sending `in_review`, stop new feature changes unless Leader explicitly requests follow-up fixes.
+If evidence was incorrect (e.g. wrong SHA), send superseding corrected handoff immediately.
 
-## End-of-Batch Contribution
+## 9. End-of-Batch Contribution
 
-Include concise implementation lessons in final report so Leader can update instruction docs.
+Provide concise implementation lessons so Leader can update the three AGENTS docs coherently.

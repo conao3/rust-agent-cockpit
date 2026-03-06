@@ -1,161 +1,150 @@
-# Orchestrator Instructions (agent-cockpit backend)
+# AGENTS.orchestrator.md
 
-This document defines backend orchestration policy. The orchestrator routes and monitors runs; it does not implement feature code.
+Backend orchestration policy for agent-cockpit.
 
-## Responsibility Boundary
+## 1. Mission
 
-- Orchestrator owns routing, run state, retries, and audit trail.
-- Leader owns technical judgment, PR review, merge, and final completion decision.
+Operate task execution as isolated, auditable runs.
+
+- Orchestrator owns routing, state, retry, reconciliation, and evidence logging.
+- Leader owns engineering judgment, merge decision, and completion judgment.
 - Members own implementation in assigned worktrees.
 
-## Core Model (Symphony-style)
+## 2. Run Unit
 
-Treat each task as an isolated run.
+Each run is identified by `task_id` and has:
 
-- One run has one `task_id`, one owner, one workspace, one active status.
-- Runtime truth is state-driven, not inferred from chat fragments.
-- A run can end at `in_review`; `done` is closeout-complete.
-- Every run must leave auditable evidence (PR, CI, validation, merge/cleanup metadata).
+- one owner (`MemberA` or `MemberB`)
+- one workspace (`./.wt/<feature-name>`)
+- monotonic status (`queued -> sent -> acknowledged -> in_progress -> in_review -> done`, plus `failed`)
+- evidence bundle (PR, SHA, validations, changed files, CI, Linear link)
 
-## Routing Contract
+No completion inference from partial signals. Final handoff line is required.
+
+## 3. Routing Rules
 
 Accepted prefixes:
 
-- `@MemberA: <message>`
-- `@MemberB: <message>`
-- `@AllMembers: <message>` (explicit broadcast only)
+- `@MemberA: ...`
+- `@MemberB: ...`
+- `@AllMembers: ...` (explicit broadcast only)
 
-If missing/ambiguous recipient, reject and return:
+If recipient is ambiguous or missing, reject:
 
 ```text
 @Orchestrator: Invalid recipient. Use @MemberA:, @MemberB:, or explicit @AllMembers:.
 ```
 
-No implicit recipient inference and no implicit broadcast.
+No implicit broadcast and no recipient inference.
 
-## Run Envelope (required metadata)
+## 4. Required Metadata Envelope
 
-Each dispatch must have:
+Every dispatch record must include:
 
 - `message_id` (UUID)
-- `task_id` (e.g. `CON-98`)
-- `from` (`Leader`)
-- `to` (`MemberA|MemberB`)
+- `task_id`
+- `from=Leader`
+- `to=MemberA|MemberB`
 - `attempt` (0-based)
-- `workspace` (e.g. `./.wt/con-98-ci-cache`)
-- `dedupe_key` (`task_id + to + normalized_message_hash`)
-- `status` (`queued|sent|acknowledged|in_progress|in_review|done|failed`)
+- `workspace`
+- `dedupe_key`
 - `timestamp`
+- `status`
 
-## State Machine and Transitions
+## 5. Delivery and ACK
 
-Per `(task_id, member)`:
+1. Deliver to one target pane unless explicit broadcast.
+2. Send text and submit action separately.
+3. Enforce task ownership lock (`task_id -> owner_member`).
+4. Wait for ACK within contract SLO (default ACK <= 10m).
+5. If ACK timeout, re-inject in same member pane immediately.
+6. Retry with bounded attempts + exponential backoff.
+7. Reassignment requires explicit Leader override.
 
-- `queued -> sent -> acknowledged -> in_progress -> in_review -> done`
-- `* -> failed` when retry budget is exhausted
+## 6. Visibility and Startup Validation
 
-Rules:
+For operator-visible runs in `agent-cockpit-team`:
 
-- Transitions are monotonic.
-- Ignore stale/out-of-order events.
-- Completion is explicit only: require final one-line `@Leader:` handoff.
-- Process exit without final handoff is `failed_needs_resume`.
+- sanitize pane input first (`Ctrl-C`)
+- send one clean command
+- declare start only after `task_id`, `log:`, and `thread.started` are observed
+- enforce heartbeat SLO (default <= 20m)
 
-## Dispatch and ACK Rules
-
-1. Route to exactly one member unless `@AllMembers`.
-2. Enforce task ownership lock (`task_id -> owner_member`).
-3. Deliver to tmux with text and submit key as separate actions.
-4. Wait for ACK within contract window.
-5. If ACK timeout: immediate pane-run reinjection to the same owner.
-6. Retry with bounded attempts and exponential backoff.
-
-Reassignment requires explicit override in Leader message (e.g. `[REASSIGN CON-98]`).
-
-## Visibility and Execution
-
-When operator expects visibility:
-
-- Run in `agent-cockpit-team` panes, not detached background-only.
-- Before launching, sanitize pane input (`Ctrl-C`) and send one clean command.
-- Start is valid only after `task_id`, `log`, and `thread.started` appear.
-- Track heartbeat cadence from contract (default ACK <= 10m, heartbeat <= 20m).
-- If no heartbeat/liveness, mark stalled and trigger resume policy.
-
-Preferred visible runner:
+Preferred launcher:
 
 ```bash
 ./scripts/codex_exec_visible.sh <task-id> "<prompt>"
 ```
 
-Logs are expected at:
+## 7. Dedupe, Concurrency, Reconciliation
 
-```text
-logs/codex/<task-id>/<timestamp>.jsonl
-```
+- suppress duplicate active dispatches by `dedupe_key`
+- only one active run per `(task_id, member)`
+- bounded concurrency with queueing
+- poll-based reconciliation cancels ineligible runs (`Done`, `Duplicate`, canceled)
 
-## De-duplication and Concurrency
+## 8. Evidence Acceptance Rules
 
-- Suppress duplicate active assignment for same `dedupe_key`.
-- Keep only one active run per `(task_id, member)`.
-- Apply bounded concurrency; queue overflow tasks.
-- On each poll, reconcile tracker state and cancel ineligible runs (done/duplicate/canceled).
-
-## Quality Gates Before `in_review` Acceptance
-
-Orchestrator must not mark/report `in_review` without all evidence fields:
+`in_review` is accepted only when handoff includes all:
 
 - PR URL
-- final head commit SHA
-- validation commands and results
+- head SHA
+- validations + results
 - changed-files summary
 
 If branch rewrite/rebase changes SHA, require refreshed evidence comment.
+If an evidence SHA was wrong, require superseding corrected evidence before closeout.
 
-## Closeout Policy
+## 9. Closeout Gate
 
-Closeout-complete only when all pass:
+A task becomes `done` only when all are true:
 
-1. PR merged.
-2. Linear moved to `Done` (or `Duplicate` with linkage).
-3. Worktree removed.
-4. Local/remote feature branches cleaned (as applicable).
-5. Local `master` synced non-destructively.
+1. PR merged
+2. Linear moved to `Done` (or `Duplicate` with link)
+3. worktree removed
+4. feature branches cleaned (local/remote as applicable)
+5. local `master` synced non-destructively
 
 Safety:
 
-- Never force reset user history.
-- Do not remove worktree for unmerged PR.
-- Do not delete branch before removing attached worktree.
+- never use destructive reset in closeout flow
+- never remove worktree for unmerged PR
+- never delete branch before attached worktree removal
 
-If required CI is pending/failing, keep issue in `In Review` and emit blocker heartbeat.
+## 10. CI Blocker Policy
 
-## PR/CI Blocker Handling
+If required checks are pending/failing:
 
-- If required checks fail after workflow edits, keep closeout blocked.
-- Example known failure: missing `pnpm` in GitHub Actions after cache optimization.
-- Route a focused fix run to owning member, then require fresh green checks before merge.
+- keep issue in `In Review`
+- emit blocker heartbeat
+- dispatch focused fix to owner
+- require fresh green required checks before merge
 
-## Batch Discipline
+Known failure pattern:
 
-At the end of every batch, update orchestrator/leader/member instruction docs with distilled lessons before the next batch.
+- GitHub Actions `Unable to locate executable file: pnpm`
+- common fix: ensure `pnpm/action-setup` is executed before Node setup/cache usage
 
-Next-batch selection order:
+## 11. Batch Policy
 
-1. closeout-first for existing `In Review` issues
-2. then new actionable work
-3. if `Todo/In Progress` empty, choose from `Backlog` with non-overlapping domains
+Before next batch launch:
 
-Always announce member mapping explicitly (`memberA=<issue> memberB=<issue>`).
+1. apply closeout-first for current `In Review` issues
+2. if none, select next actionable work
+3. if `Todo/In Progress` empty, pick from `Backlog` with non-overlapping domains
+4. publish explicit mapping (`memberA=<issue> memberB=<issue>`)
+5. update orchestrator/leader/member docs with distilled lessons
 
-## Observability Fields (must log)
+## 12. Audit Log Fields
+
+Log at least:
 
 - recipient parse result
-- selected pane
+- pane target
 - `message_id`, `task_id`, `attempt`
 - dedupe hit/miss
-- ownership lock action
-- retry count/backoff
+- ownership lock actions
+- retry count
 - workspace path
-- current status
+- status transitions
 - evidence links (PR/CI/Linear comment IDs)
