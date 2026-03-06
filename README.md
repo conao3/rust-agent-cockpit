@@ -76,6 +76,8 @@ Sample linear project.
 ## Claude Code State Monitoring
 
 cockpit monitors each agent's state using **Claude Code hooks**.
+The monitoring runner is backend-resident and starts automatically with the Tauri backend.
+No manual orchestrator watch process is required.
 
 ### States
 

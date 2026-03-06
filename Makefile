@@ -14,6 +14,10 @@ dev-web: install
 build:
 	$(MAKE) -C src-tauri build
 
+.PHONY: test
+test:
+	$(MAKE) -C src-tauri test
+
 .PHONY: fmt
 fmt:
 	nix fmt
