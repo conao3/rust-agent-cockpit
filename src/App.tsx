@@ -5,6 +5,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
 import "./App.css";
+import { Window } from "./components/Window";
 
 type PtyId = string | number;
 
@@ -143,13 +144,9 @@ function App() {
 
   return (
     <main className="app">
-      <header className="app-header">
-        <h1>PTY Terminal</h1>
-        <span className={`status status-${status}`}>{status}</span>
-      </header>
-      <section className="terminal-panel">
+      <Window title="PTY Terminal" status={status}>
         <div className="terminal-host" ref={terminalHostRef} />
-      </section>
+      </Window>
     </main>
   );
 }
