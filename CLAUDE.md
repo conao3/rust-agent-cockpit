@@ -8,6 +8,7 @@
 ## Code Style
 
 - Use `function` declarations for top-level functions. Do not use `const f = () =>` at the top level.
+- Prefer `satisfies` over `as` for type annotations on object literals. Use `as` only when type narrowing is required (e.g., `as HTMLElement`, `as Record<string, unknown>`).
 
 ## Lint
 
