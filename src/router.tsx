@@ -1,6 +1,7 @@
 import { Link, Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { HomeRoute } from "./routes/HomeRoute";
 import { PlaceholderRoute } from "./routes/PlaceholderRoute";
+import { SettingsRoute } from "./routes/SettingsRoute";
 
 const navLinkClass =
   "rounded-full border border-slate-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-300 transition hover:border-cyan-300 hover:text-cyan-100";
@@ -24,6 +25,13 @@ function RootLayout() {
             activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
           >
             placeholder
+          </Link>
+          <Link
+            to="/settings"
+            className={navLinkClass}
+            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+          >
+            settings
           </Link>
         </nav>
       </header>
@@ -50,7 +58,13 @@ const placeholderRoute = createRoute({
   component: PlaceholderRoute,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, placeholderRoute]);
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsRoute,
+});
+
+const routeTree = rootRoute.addChildren([homeRoute, placeholderRoute, settingsRoute]);
 
 export const router = createRouter({
   routeTree,
