@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
 import { ConnectionManager } from "./components/ConnectionManager";
+import { usePtyMutations } from "./hooks/usePtyMutations";
+import type { PtyId } from "./ptyApi";
 import { Window } from "./components/Window";
-
-type PtyId = string | number;
-
-type PtyCreateResponse = {
-  id: string;
-};
 
 type PtyCreateContext = {
   cwd?: string;
@@ -105,6 +100,7 @@ function App() {
   const desktopRef = useRef<HTMLDivElement | null>(null);
   const terminalHostRef = useRef<HTMLDivElement | null>(null);
   const ptyIdRef = useRef<string | null>(null);
+  const { createPty, writePty, resizePty, closePty } = usePtyMutations();
   const [status, setStatus] = useState("connecting");
   const [windows, setWindows] = useState<ManagedWindow[]>(initialWindows);
   const [zOrder, setZOrder] = useState<WindowId[]>(["connections", "terminal"]);
@@ -214,7 +210,7 @@ function App() {
       if (!id) {
         return;
       }
-      invoke("pty_write", { req: { id, data } }).catch((error) => {
+      writePty({ id, data }).catch((error) => {
         terminal.writeln(`\r\n[pty_write error] ${String(error)}`);
       });
     });
@@ -224,12 +220,10 @@ function App() {
       if (!id) {
         return;
       }
-      invoke("pty_resize", {
-        req: {
-          id,
-          cols: terminal.cols,
-          rows: terminal.rows,
-        },
+      resizePty({
+        id,
+        cols: terminal.cols,
+        rows: terminal.rows,
       }).catch((error) => {
         terminal.writeln(`\r\n[pty_resize error] ${String(error)}`);
       });
@@ -244,14 +238,12 @@ function App() {
     const bootstrap = async () => {
       try {
         const context = resolvePtyCreateContext(window.location.search);
-        const { id } = await invoke<PtyCreateResponse>("pty_create", {
-          req: {
-            cols: terminal.cols,
-            rows: terminal.rows,
-            cwd: context.cwd,
-            task_id: context.taskId,
-            member: context.member,
-          },
+        const { id } = await createPty({
+          cols: terminal.cols,
+          rows: terminal.rows,
+          cwd: context.cwd,
+          task_id: context.taskId,
+          member: context.member,
         });
         ptyIdRef.current = id;
 
@@ -290,7 +282,7 @@ function App() {
       }
       const id = ptyIdRef.current;
       if (id) {
-        void invoke("pty_close", { req: { id } });
+        void closePty({ id });
       }
       terminal.dispose();
       ptyIdRef.current = null;
