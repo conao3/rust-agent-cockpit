@@ -20,9 +20,9 @@ describe("agentSettingsApi", () => {
     };
     invokeMock.mockResolvedValueOnce(payload);
 
-    const result = await agentSettingsGet();
+    const result = await agentSettingsGet({ cockpitId: "default" });
 
-    expect(invokeMock).toHaveBeenCalledWith("agent_settings_get", { req: {} });
+    expect(invokeMock).toHaveBeenCalledWith("agent_settings_get", { req: { cockpitId: "default" } });
     expect(result).toEqual(payload);
   });
 
@@ -41,10 +41,10 @@ describe("agentSettingsApi", () => {
     };
     invokeMock.mockResolvedValueOnce(settings);
 
-    const result = await agentSettingsSave({ settings });
+    const result = await agentSettingsSave({ cockpitId: "default", settings });
 
     expect(invokeMock).toHaveBeenCalledWith("agent_settings_save", {
-      req: { settings },
+      req: { cockpitId: "default", settings },
     });
     expect(result).toEqual(settings);
   });
@@ -55,7 +55,7 @@ describe("agentSettingsApi", () => {
       agents: [{ id: "leader", name: "Leader", command: "codex", systemPrompt: null }],
     });
 
-    await expect(agentSettingsGet()).rejects.toThrow(
+    await expect(agentSettingsGet({ cockpitId: "default" })).rejects.toThrow(
       "agent settings response invalid: root.agents[0].toolRestrictions must be array",
     );
   });
@@ -67,7 +67,7 @@ describe("agentSettingsApi", () => {
       agents: [],
     });
 
-    await expect(agentSettingsSave({ settings })).rejects.toThrow(
+    await expect(agentSettingsSave({ cockpitId: "default", settings })).rejects.toThrow(
       "agent settings response invalid: root.version must be positive number",
     );
   });

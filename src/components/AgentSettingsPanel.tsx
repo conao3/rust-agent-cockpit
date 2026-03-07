@@ -45,7 +45,11 @@ function normalizeSettings(settings: AgentSettingsDocument): AgentSettingsDocume
   };
 }
 
-export function AgentSettingsPanel() {
+type AgentSettingsPanelProps = {
+  cockpitId: string;
+};
+
+export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
   const [settings, setSettings] = useState<AgentSettingsDocument>(emptyDocument);
   const [baseline, setBaseline] = useState<AgentSettingsDocument>(emptyDocument);
   const [loading, setLoading] = useState(true);
@@ -60,7 +64,7 @@ export function AgentSettingsPanel() {
     setError(null);
     setNotice(null);
     try {
-      const loaded = await agentSettingsGet();
+      const loaded = await agentSettingsGet({ cockpitId });
       const snapshot = cloneDocument(loaded);
       setSettings(snapshot);
       setBaseline(snapshot);
@@ -113,7 +117,7 @@ export function AgentSettingsPanel() {
     setError(null);
     setNotice(null);
     try {
-      const saved = await agentSettingsSave({ settings: normalizeSettings(settings) });
+      const saved = await agentSettingsSave({ cockpitId, settings: normalizeSettings(settings) });
       const snapshot = cloneDocument(saved);
       setSettings(snapshot);
       setBaseline(snapshot);

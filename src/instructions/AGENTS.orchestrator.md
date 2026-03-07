@@ -134,13 +134,19 @@ Safety rules:
 
 For each batch:
 1. closeout-first sweep (`In Review`)
-2. if none, pick exactly two non-overlapping actionable issues
-3. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
-4. dispatch with full scope/non-scope/validation/evidence contract
-5. supervise ACK/heartbeat and recover on stall
-6. close out finished issue immediately even if sibling still running
-7. dispatch next pair when safe
-8. recompose AGENTS docs and push before next batch kickoff
+2. supervise/recover already-active runs before selecting new issues
+3. if none active (or active runs are safely closed/blocked), pick exactly two non-overlapping actionable issues
+4. prefer pairings with minimal shared files; if overlap risk exists, split contracts explicitly by file ownership
+5. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
+6. dispatch with full scope/non-scope/validation/evidence contract
+7. supervise ACK/heartbeat and recover on stall
+8. close out finished issue immediately even if sibling still running
+9. dispatch next pair when safe
+10. recompose AGENTS docs and push before next batch kickoff
+
+Batch kickoff handover requirement:
+- if prior batch leaves active runs, next batch must start with those run IDs and latest ACK/heartbeat snapshot before selecting any new issues
+- include the previous batch id and current batch id in the operator-visible kickoff report
 
 Preflight before dispatch:
 - run `git status --short`

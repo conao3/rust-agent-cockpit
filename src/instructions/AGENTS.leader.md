@@ -26,7 +26,7 @@ Each delegation must include:
 ## 3. Batch Order
 
 1. closeout existing `In Review`
-2. supervise active runs
+2. supervise active runs first (recover stalled runs before new dispatch)
 3. if queue empty, choose two non-overlapping backlog issues
 4. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
 
@@ -72,6 +72,7 @@ Reject handoff unless all are present:
 - head SHA
 - validation commands + results
 - changed-files summary
+- risk note (`none` allowed)
 
 If SHA changed, require superseding corrected evidence.
 If final `@Leader ... in_review` line is missing, post explicit evidence checkpoint before merge.
@@ -118,9 +119,11 @@ Before next batch:
 - recompose all AGENTS docs coherently (not append-only)
 - remove duplicate/conflicting rules
 - commit and push docs update
+- include current member mapping and active-run status snapshot in the batch report
 - run preflight `git status --short`
 - classify dirty entries; block only unknown/conflicting
 - then kickoff next batch mapping
+- in kickoff report, always include carry-over active runs (`task_id`, owner, latest ACK/heartbeat) and the new batch id
 
 Known non-blocking artifacts:
 - `src-tauri/logs/`
