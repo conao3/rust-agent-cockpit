@@ -120,12 +120,12 @@ export function MvpRoute() {
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <a
-              href={`/cockpit${search}`}
+              href={`/agent-cockpit/default${search}`}
               className="rounded-md border border-cyan-400 bg-cyan-400 px-3 py-1.5 text-sm font-semibold text-slate-900 transition hover:brightness-110"
             >
               start cockpit session
             </a>
-            <span className="text-xs text-slate-500">/cockpit{search || ""}</span>
+            <span className="text-xs text-slate-500">/agent-cockpit/default{search || ""}</span>
           </div>
 
           {error ? (

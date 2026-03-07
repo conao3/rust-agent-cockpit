@@ -1,4 +1,5 @@
 import { Link, Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { CockpitListRoute } from "./routes/CockpitListRoute";
 import { HomeRoute } from "./routes/HomeRoute";
 import { LinearInboxRoute } from "./routes/LinearInboxRoute";
 import { MvpRoute } from "./routes/MvpRoute";
@@ -19,14 +20,14 @@ function RootLayout() {
             className={navLinkClass}
             activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
           >
-            mvp
+            cockpits
           </Link>
           <Link
-            to="/cockpit"
+            to="/bootstrap"
             className={navLinkClass}
             activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
           >
-            cockpit
+            mvp
           </Link>
           <Link
             to="/settings"
@@ -66,12 +67,18 @@ const rootRoute = createRootRoute({
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  component: CockpitListRoute,
+});
+
+const mvpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/bootstrap",
   component: MvpRoute,
 });
 
 const cockpitRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/cockpit",
+  path: "/agent-cockpit/$cockpit_id",
   component: HomeRoute,
 });
 
@@ -93,7 +100,14 @@ const linearInboxRoute = createRoute({
   component: LinearInboxRoute,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, cockpitRoute, settingsRoute, taskLifecycleRoute, linearInboxRoute]);
+const routeTree = rootRoute.addChildren([
+  homeRoute,
+  mvpRoute,
+  cockpitRoute,
+  settingsRoute,
+  taskLifecycleRoute,
+  linearInboxRoute,
+]);
 
 export const router = createRouter({
   routeTree,
