@@ -91,6 +91,11 @@ If branch rewrite/rebase changes SHA:
 - require refreshed evidence comment with new SHA
 - if prior SHA was wrong, require explicit superseding correction
 
+If a recovery run completes implementation but misses the final `@Leader ... in_review` line:
+
+- do not treat terminal completion alone as accepted handoff
+- require Leader to record an evidence checkpoint (PR URL, SHA, validations, changed files) in Linear before any closeout action
+
 ## H. Closeout Gate
 
 `done` only when all pass:

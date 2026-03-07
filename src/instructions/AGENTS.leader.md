@@ -77,6 +77,7 @@ Reject handoff unless all present:
 
 If SHA changes after rewrite/rebase, require corrected evidence comment.
 If prior evidence SHA was incorrect, require superseding correction.
+If a member recovery run omits the final `@Leader ... in_review` line, create a Linear evidence checkpoint yourself (PR/SHA/validations/files) before merge/closeout.
 
 ## G. PR Review Gate
 
