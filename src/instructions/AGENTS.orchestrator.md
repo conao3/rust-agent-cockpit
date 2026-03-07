@@ -152,6 +152,14 @@ After closeout completion inside a batch:
 - it is valid to dispatch the next two non-overlapping issues in the same batch
 - when those runs are already spawned, the next batch must monitor/recover those active runs first (no duplicate re-dispatch)
 
+Branch contamination recovery rule:
+
+- if two task commits are mixed into one branch/PR, split immediately:
+  1) create dedicated branch from `origin/master` for the misplaced task
+  2) cherry-pick misplaced commit to dedicated branch
+  3) reset original branch to task-pure commit
+  4) verify each PR changed-files scope before setting `in_review`
+
 ## K. Audit Fields
 
 Log minimum fields:

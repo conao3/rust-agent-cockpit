@@ -88,8 +88,15 @@ Before merge, verify:
 - no unrelated files/commits (especially `src/instructions/*` unless explicitly requested)
 - required CI checks green
 - mergeability after base updates/conflict resolution
+- branch purity per task in parallel runs (no mixed task commits across PRs)
 
 If self-approval is blocked, record manual review evidence and proceed with merge checks.
+
+If parallel branches are contaminated:
+
+1. split commits into task-dedicated branches from `origin/master`
+2. restore original branch to task-pure history
+3. re-validate changed-files summaries for both PRs before keeping `In Review`
 
 ## H. Closeout Gate (`done`)
 

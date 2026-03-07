@@ -46,6 +46,7 @@ Before handoff:
 - apply Leader-requested rebase/update
 - report updated SHA after rewrite/rebase
 - include short conflict note if conflict resolved
+- if leader reports branch contamination with another task, assist split/rebase immediately and resend task-pure evidence
 
 ## E. Evidence Contract (`in_review`)
 
