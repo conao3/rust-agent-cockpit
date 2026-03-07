@@ -11,6 +11,9 @@ Member must:
 - never merge PRs
 - assume implementation ownership once assigned; Leader should remain review/closeout unless operator says otherwise
 
+Delegation integrity note:
+- if leader proposes to complete your assigned implementation directly without explicit operator authorization, raise a blocker line immediately
+
 ## 2. Message Contract
 
 All messages to Leader must use:

@@ -21,6 +21,10 @@ Orchestrator must not do:
 - direct PR quality judgment or merge decision (Leader responsibility)
 - bypass delegation by having Leader implement task code/docs unless operator explicitly authorizes it
 
+Delegation policy enforcement:
+- if a batch reports task completion without member-side ACK/heartbeat/evidence for assigned issues, treat it as policy violation and do not mark that path complete
+- require explicit operator authorization record before accepting any leader-side implementation edits
+
 ## 2. System Topology
 
 Execution topology:

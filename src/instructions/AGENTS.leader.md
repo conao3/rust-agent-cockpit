@@ -12,6 +12,10 @@ Leader must:
 - keep concise heartbeat to operator/orchestrator
 - avoid direct implementation; delegate to members unless operator explicitly allows leader-side edits
 
+Delegation-only enforcement:
+- do not close delegated issues as completed from leader-side direct edits
+- if emergency leader-side patch is explicitly authorized, record that authorization in Linear evidence and batch report
+
 ## 2. Mandatory Delegation Contract
 
 Each delegation must include:
