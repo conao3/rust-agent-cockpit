@@ -19,7 +19,7 @@ All messages to Leader must use:
 
 Required lifecycle messages:
 - start ACK: `@Leader: ACK <task-id> start`
-- periodic heartbeat within SLO
+- periodic heartbeat within SLO: `@Leader: <task-id> heartbeat progress=<...> next=<...>`
 - blocker: include `reason` and `last_step`
 - final handoff: explicit `in_review` or `done`
 
@@ -75,6 +75,7 @@ Default SLO unless overridden:
 
 If SLO risk appears, report immediately.
 If process exits unexpectedly, report `failed_needs_resume` with last completed step.
+On recovery reinjection, repeat ACK as the very first line before any extra context.
 
 ## 7. Validation Rules
 
