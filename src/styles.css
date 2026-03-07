@@ -46,6 +46,10 @@ body {
   border: 1px solid #334155;
 }
 
+.react-flow__node.selected {
+  box-shadow: none !important;
+}
+
 .window-resize-handle {
   position: absolute;
   right: 0;

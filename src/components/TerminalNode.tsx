@@ -144,13 +144,13 @@ export function TerminalNode({ data }: NodeProps<TerminalNodeData>) {
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-slate-700 bg-[#0a0a0a] shadow-lg">
       <Handle type="target" position={Position.Top} className="!bg-slate-500" />
-      <div className="flex items-center justify-between border-b border-slate-700 px-3 py-1.5">
+      <div className="terminal-drag-handle flex cursor-grab items-center justify-between border-b border-slate-700 px-3 py-1.5">
         <span className="text-xs font-semibold text-slate-200">{data.label}</span>
         <span className={`text-[10px] ${statusClassNames[statusRef.current] ?? "text-slate-400"}`}>
           {statusRef.current}
         </span>
       </div>
-      <div ref={hostRef} className="h-[300px] w-[600px]" />
+      <div ref={hostRef} className="nodrag nowheel nopan h-[300px] w-[600px]" />
       <Handle type="source" position={Position.Bottom} className="!bg-slate-500" />
     </div>
   );

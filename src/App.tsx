@@ -8,7 +8,6 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { AgentNode, type AgentNodeData } from "./components/AgentNode";
-import { TerminalNode, type TerminalNodeData } from "./components/TerminalNode";
 
 export const resolvePtyCreateContext = (search: string) => {
   const params = new URLSearchParams(search);
@@ -32,19 +31,25 @@ export const resolvePtyCreateContext = (search: string) => {
 
 const nodeTypes = {
   agent: AgentNode,
-  terminal: TerminalNode,
 } as const;
 
 function App() {
   const context = useMemo(() => resolvePtyCreateContext(window.location.search), []);
 
-  const initialNodes: Node<AgentNodeData | TerminalNodeData>[] = useMemo(
+  const initialNodes: Node<AgentNodeData>[] = useMemo(
     () => [
       {
         id: "leader",
         type: "agent",
         position: { x: 300, y: 40 },
-        data: { label: "Leader", role: "leader", status: "online" } as AgentNodeData,
+        data: {
+          label: "Leader",
+          role: "leader",
+          status: "online",
+          cwd: context.cwd,
+          taskId: context.taskId,
+          member: context.member,
+        } as AgentNodeData,
       },
       {
         id: "member-a",
@@ -57,17 +62,6 @@ function App() {
         type: "agent",
         position: { x: 500, y: 220 },
         data: { label: "Member B", role: "member", status: "idle" } as AgentNodeData,
-      },
-      {
-        id: "terminal-leader",
-        type: "terminal",
-        position: { x: 700, y: 20 },
-        data: {
-          label: "Leader PTY",
-          cwd: context.cwd,
-          taskId: context.taskId,
-          member: context.member,
-        } as TerminalNodeData,
       },
     ],
     [context],
