@@ -18,12 +18,34 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State};
+#[cfg(desktop)]
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 
 const COCKPIT_HOOK_SCRIPT_RELATIVE_PATH: &str = ".claude/hooks/cockpit-monitor.sh";
 const COCKPIT_CLAUDE_SETTINGS_RELATIVE_PATH: &str = ".claude/settings.json";
 const COCKPIT_HOOK_SOURCE: &str = "claude_hook";
 const AGENT_SETTINGS_RELATIVE_PATH: &str = ".agent-cockpit/agent-settings.toml";
 const AGENT_SETTINGS_VERSION: u32 = 1;
+#[cfg(desktop)]
+const DEV_MENU_ID_RELOAD: &str = "developer.reload";
+#[cfg(desktop)]
+const DEV_MENU_ID_OPEN_DEVTOOLS: &str = "developer.open-devtools";
+
+#[cfg(desktop)]
+fn setup_developer_menu(app: &AppHandle) -> tauri::Result<()> {
+    let reload = MenuItemBuilder::with_id(DEV_MENU_ID_RELOAD, "Reload")
+        .accelerator("CmdOrCtrl+R")
+        .build(app)?;
+    let open_devtools = MenuItemBuilder::with_id(DEV_MENU_ID_OPEN_DEVTOOLS, "Open DevTools")
+        .accelerator("CmdOrCtrl+Shift+I")
+        .build(app)?;
+    let developer_submenu = SubmenuBuilder::new(app, "Developer")
+        .items(&[&reload, &open_devtools])
+        .build()?;
+    let menu = MenuBuilder::new(app).item(&developer_submenu).build()?;
+    app.set_menu(menu)?;
+    Ok(())
+}
 
 struct ClaudeHookSpec {
     event_name: &'static str,
@@ -2465,11 +2487,26 @@ fn linear_ingest_poll_comments(
 pub fn run() {
     let monitoring_manager = MonitoringManager::default();
     tauri::Builder::default()
+        .on_menu_event(|app, event| {
+            if !cfg!(debug_assertions) {
+                return;
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                if event.id() == DEV_MENU_ID_RELOAD {
+                    let _ = window.eval("window.location.reload()");
+                } else if event.id() == DEV_MENU_ID_OPEN_DEVTOOLS {
+                    window.open_devtools();
+                }
+            }
+        })
         .manage(PtyManager::default())
         .manage(WorktreeManager::default())
         .manage(monitoring_manager)
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            if cfg!(debug_assertions) {
+                setup_developer_menu(&app.handle())?;
+            }
             let manager = app.state::<MonitoringManager>();
             manager.start_runner_if_needed(&app.handle())?;
             Ok(())
