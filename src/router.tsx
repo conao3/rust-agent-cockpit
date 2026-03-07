@@ -2,6 +2,7 @@ import { Link, Outlet, createRootRoute, createRoute, createRouter } from "@tanst
 import { HomeRoute } from "./routes/HomeRoute";
 import { MvpRoute } from "./routes/MvpRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
+import { TaskLifecycleRoute } from "./routes/TaskLifecycleRoute";
 
 const navLinkClass =
   "rounded-full border border-slate-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-300 transition hover:border-cyan-300 hover:text-cyan-100";
@@ -32,6 +33,14 @@ function RootLayout() {
             activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
           >
             settings
+          </Link>
+          <Link
+            to="/agent-cockpit/$cockpit_id/tasks"
+            params={{ cockpit_id: "default" }}
+            className={navLinkClass}
+            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+          >
+            tasks
           </Link>
         </nav>
       </header>
@@ -64,7 +73,13 @@ const settingsRoute = createRoute({
   component: SettingsRoute,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, cockpitRoute, settingsRoute]);
+const taskLifecycleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent-cockpit/$cockpit_id/tasks",
+  component: TaskLifecycleRoute,
+});
+
+const routeTree = rootRoute.addChildren([homeRoute, cockpitRoute, settingsRoute, taskLifecycleRoute]);
 
 export const router = createRouter({
   routeTree,
