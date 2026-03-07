@@ -27,6 +27,7 @@ Required lifecycle messages:
 If run is reinjected/restarted, ACK again with same `task_id`.
 If recovery is reinjected from a stalled leader run, send ACK first, then immediately include current step so leader can rebuild supervision state.
 Before exit, always emit the final `@Leader ... in_review|done` line explicitly, even if PR creation/validation already succeeded.
+Send ACK before any long-running command so leader can timestamp SLA compliance reliably.
 
 ## C. Scope and Repo Hygiene
 

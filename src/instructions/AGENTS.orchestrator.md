@@ -157,3 +157,5 @@ Log minimum fields:
 - retries and timers
 - state transitions
 - evidence links (PR/CI/Linear comment IDs)
+- member run session identifiers (when visible dispatch starts)
+- ACK receipt timestamps per `task_id`
