@@ -34,6 +34,8 @@ Always announce assignment mapping explicitly.
 Mixed-progress rule:
 
 - if one assigned issue reaches `in_review` before the other, run closeout immediately for that issue while keeping the other issue in active execution monitoring
+- after closeout is finished, you may dispatch the next two non-overlapping issues in the same batch
+- in the next batch, prioritize monitoring/recovery of already spawned runs before selecting new issues
 
 ## D. Worktree Rules
 
