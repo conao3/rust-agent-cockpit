@@ -44,6 +44,7 @@ Reinjection/recovery rules:
 - do not commit runtime artifacts (e.g. `src-tauri/logs/`) unless assigned
 - avoid touching known operator-owned dirty files unless assigned
 - ignore `docs/design-pencil.pen` unless assigned
+- do not escalate/stop only because `src-tauri/logs/` exists as untracked; treat it as known runtime artifact
 
 ## 4. Branch Hygiene
 

@@ -162,6 +162,7 @@ Preflight before dispatch:
 - classify dirty entries: known non-blocking / task-owned / unknown-conflicting
 - known non-blocking examples: `src-tauri/logs/`, `docs/design-pencil.pen`
 - block and escalate only unknown/conflicting entries
+- do not pause batch execution for known non-blocking runtime artifacts (especially `src-tauri/logs/`)
 
 Active-run log discovery rule:
 - discover active member logs by listing recent files per `task_id` directory (`logs/codex/<task_id>/*.jsonl`) instead of global grep-only scans

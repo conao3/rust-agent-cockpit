@@ -141,6 +141,10 @@ Known non-blocking artifacts:
 - `src-tauri/logs/`
 - `docs/design-pencil.pen`
 
+Unexpected-change handling refinement:
+- known non-blocking artifacts above must not trigger batch stop prompts
+- only unknown/conflicting dirty entries can trigger pause/escalation
+
 ## 11. Linear Management
 
 Leader must keep Linear state and evidence synchronized:
