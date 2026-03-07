@@ -123,6 +123,11 @@ Every batch follows:
 4. enforce full contract (scope/validation/SLO/evidence)
 5. recompose AGENTS docs as one coherent set before next batch
 
+In mixed-progress batches:
+
+- if one issue reaches `in_review` earlier, switch that issue to immediate closeout flow without blocking the sibling issue run
+- continue monitoring the remaining sibling run against the same ACK/heartbeat SLO and evidence rules
+
 ## K. Audit Fields
 
 Log minimum fields:

@@ -85,6 +85,7 @@ If process exits unexpectedly, report `failed_needs_resume` with last completed 
 
 After `in_review` handoff, stop feature edits unless Leader asks for follow-up.
 If any evidence was wrong (e.g. SHA typo), send superseding corrected handoff immediately.
+If your sibling issue is still in progress, do not resume unrelated edits after handoff; wait for explicit Leader instruction.
 
 ## I. End-of-Batch Input
 

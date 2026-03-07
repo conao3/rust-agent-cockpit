@@ -31,6 +31,10 @@ Each delegation must include:
 
 Always announce assignment mapping explicitly.
 
+Mixed-progress rule:
+
+- if one assigned issue reaches `in_review` before the other, run closeout immediately for that issue while keeping the other issue in active execution monitoring
+
 ## D. Worktree Rules
 
 Provision per-task worktree:
