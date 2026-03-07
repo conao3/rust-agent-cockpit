@@ -109,6 +109,7 @@ Done only when all pass:
 5. local `master` synced non-destructively
 
 No destructive git sync commands.
+If worktree/branch is already absent (for example removed by merge automation), record it as already-clean instead of treating it as failure.
 
 ## I. Blocker Protocol
 

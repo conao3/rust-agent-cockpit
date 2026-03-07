@@ -93,6 +93,7 @@ After `in_review` handoff, stop feature edits unless Leader asks for follow-up.
 If any evidence was wrong (e.g. SHA typo), send superseding corrected handoff immediately.
 If your sibling issue is still in progress, do not resume unrelated edits after handoff; wait for explicit Leader instruction.
 If Leader keeps the same batch open and immediately starts the next assignment set, treat it as a new run only after explicit new `task_id` ACK.
+Do not perform final cleanup assumptions in member reports; report current branch/worktree state and let Leader decide closeout actions.
 
 ## I. End-of-Batch Input
 

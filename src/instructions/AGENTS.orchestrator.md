@@ -111,6 +111,7 @@ Safety rules:
 - no destructive reset
 - no worktree removal on unmerged PR
 - no branch delete before worktree detach
+- cleanup actions are state-based: if no task worktree/branch exists, record as already-clean and continue (do not fail closeout)
 
 ## I. Blocker Handling
 
