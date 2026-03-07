@@ -48,4 +48,27 @@ describe("agentSettingsApi", () => {
     });
     expect(result).toEqual(settings);
   });
+
+  it("rejects malformed get response payload", async () => {
+    invokeMock.mockResolvedValueOnce({
+      version: 1,
+      agents: [{ id: "leader", name: "Leader", command: "codex", systemPrompt: null }],
+    });
+
+    await expect(agentSettingsGet()).rejects.toThrow(
+      "agent settings response invalid: root.agents[0].toolRestrictions must be array",
+    );
+  });
+
+  it("rejects malformed save response payload", async () => {
+    const settings: AgentSettingsDocument = { version: 1, agents: [] };
+    invokeMock.mockResolvedValueOnce({
+      version: "1",
+      agents: [],
+    });
+
+    await expect(agentSettingsSave({ settings })).rejects.toThrow(
+      "agent settings response invalid: root.version must be positive number",
+    );
+  });
 });
