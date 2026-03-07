@@ -191,7 +191,7 @@ function App() {
       convertEol: true,
       cursorBlink: true,
       scrollback: 1000,
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      fontFamily: "'Source Code Pro Variable', 'Source Code Pro', monospace",
       fontSize: 14,
       theme: {
         background: "#111827",

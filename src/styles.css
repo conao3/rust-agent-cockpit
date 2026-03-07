@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Source Sans 3 Variable", "Source Sans 3", sans-serif;
+  --font-mono: "Source Code Pro Variable", "Source Code Pro", monospace;
+}
+
 html,
 body,
 #root {
@@ -9,7 +14,7 @@ body,
 }
 
 body {
-  font-family: "Noto Sans", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3 Variable", "Source Sans 3", sans-serif;
   background: #030712;
   color: #e5e7eb;
 }
