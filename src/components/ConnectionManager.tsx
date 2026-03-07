@@ -329,9 +329,9 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
       </form>
 
       {state.error ? (
-        <p className="m-0 text-sm text-red-300" role="status" aria-live="polite">
+        <div className="m-0 text-sm text-red-300" role="status" aria-live="polite">
           {state.error}
-        </p>
+        </div>
       ) : null}
 
       <ul className="m-0 flex list-none flex-col gap-2 overflow-auto p-0" aria-label="connection list">
@@ -346,7 +346,7 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
                 →
               </span>
               <strong>{idToLabel.get(connection.toId) ?? connection.toId}</strong>
-              <p className="m-0 mt-1 text-xs text-slate-400">{connection.description || "no description"}</p>
+              <div className="m-0 mt-1 text-xs text-slate-400">{connection.description || "no description"}</div>
             </div>
             <div className="flex gap-2">
               <Button

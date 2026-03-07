@@ -45,7 +45,7 @@ export function MvpRoute() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">MVP Session Bootstrap</h2>
-              <p className="m-0 text-sm text-slate-400">Prepare task context, then start the cockpit terminal + graph session.</p>
+              <div className="m-0 text-sm text-slate-400">Prepare task context, then start the cockpit terminal + graph session.</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
@@ -117,9 +117,9 @@ export function MvpRoute() {
           </div>
 
           {error ? (
-            <p role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+            <div role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
               {error}
-            </p>
+            </div>
           ) : null}
         </section>
 
@@ -129,9 +129,9 @@ export function MvpRoute() {
             <span className="text-xs text-slate-500">{rows.length} item(s)</span>
           </div>
           {rows.length === 0 ? (
-            <p className="m-0 text-sm text-slate-400">
+            <div className="m-0 text-sm text-slate-400">
               {loading ? "Loading worktrees..." : "No worktrees detected under .wt"}
-            </p>
+            </div>
           ) : (
             <ul className="m-0 grid list-none gap-2 p-0">
               {rows.map((row) => (
@@ -140,8 +140,8 @@ export function MvpRoute() {
                   className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-950/70 px-3 py-2"
                 >
                   <div className="min-w-0">
-                    <p className="m-0 text-sm font-semibold text-slate-100">{row.branch}</p>
-                    <p className="m-0 truncate text-xs text-slate-500">{row.worktreeDir}</p>
+                    <div className="m-0 text-sm font-semibold text-slate-100">{row.branch}</div>
+                    <div className="m-0 truncate text-xs text-slate-500">{row.worktreeDir}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="rounded border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">

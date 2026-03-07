@@ -124,7 +124,7 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">Agent Settings</h2>
-            <p className="m-0 text-sm text-slate-400">Edit runtime profiles and save to .agent-cockpit/agent-settings.toml.</p>
+            <div className="m-0 text-sm text-slate-400">Edit runtime profiles and save to .agent-cockpit/agent-settings.toml.</div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -170,12 +170,12 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
         </div>
 
         {error ? (
-          <p role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+          <div role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
             {error}
-          </p>
+          </div>
         ) : null}
         {notice ? (
-          <p className="mt-3 rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>
+          <div className="mt-3 rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</div>
         ) : null}
       </section>
 

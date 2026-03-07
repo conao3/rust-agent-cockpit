@@ -326,16 +326,16 @@ export function TaskLifecycleRoute() {
       <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-6">
         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#1f1f1f] pb-4">
           <div>
-            <p className="m-0 font-mono text-xs text-[#737373]">task_lifecycle_monitor</p>
+            <div className="m-0 font-mono text-xs text-[#737373]">task_lifecycle_monitor</div>
             <h2 className="m-0 font-mono text-2xl font-semibold text-[#e5e5e5]">Task Lifecycle Monitor</h2>
-            <p className="m-0 mt-1 font-mono text-xs text-[#737373]">
+            <div className="m-0 mt-1 font-mono text-xs text-[#737373]">
               real-time task orchestration state across agents
-            </p>
+            </div>
           </div>
           <div className="text-right font-mono text-xs text-[#737373]">
-            <p className="m-0">cockpit: {cockpitId}</p>
-            <p className="m-0">realtime: {lastRealtime ? formatElapsed(tick - lastRealtime) : "waiting"}</p>
-            <p className="m-0">tracked: {tasks.length}</p>
+            <div className="m-0">cockpit: {cockpitId}</div>
+            <div className="m-0">realtime: {lastRealtime ? formatElapsed(tick - lastRealtime) : "waiting"}</div>
+            <div className="m-0">tracked: {tasks.length}</div>
           </div>
         </header>
 
@@ -344,10 +344,10 @@ export function TaskLifecycleRoute() {
             const meta = statusMeta[state];
             return (
               <article key={state} className="rounded border border-[#1f1f1f] bg-[#171717] p-3 font-mono">
-                <p className={`m-0 text-[11px] uppercase tracking-[0.08em] ${meta.textClass}`}>{state}</p>
-                <p className={`m-0 mt-1 text-xl font-semibold ${meta.textClass}`}>
+                <div className={`m-0 text-[11px] uppercase tracking-[0.08em] ${meta.textClass}`}>{state}</div>
+                <div className={`m-0 mt-1 text-xl font-semibold ${meta.textClass}`}>
                   {meta.icon} {counts[state]}
-                </p>
+                </div>
               </article>
             );
           })}
@@ -391,7 +391,7 @@ export function TaskLifecycleRoute() {
               refresh
             </button>
           </div>
-          {message ? <p className="m-0 mt-2 font-mono text-xs text-[#a3a3a3]">{message}</p> : null}
+          {message ? <div className="m-0 mt-2 font-mono text-xs text-[#a3a3a3]">{message}</div> : null}
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
@@ -496,7 +496,7 @@ export function TaskLifecycleRoute() {
               <span className="text-xs text-rose-300">{alerts.length} active</span>
             </div>
             <div className="space-y-2">
-              {alerts.length === 0 ? <p className="m-0 text-xs text-[#737373]">no active SLA alerts</p> : null}
+              {alerts.length === 0 ? <div className="m-0 text-xs text-[#737373]">no active SLA alerts</div> : null}
               {alerts.map(({ task, sla }) => (
                 <article
                   key={`${task.taskId}:${task.member}`}
@@ -504,12 +504,12 @@ export function TaskLifecycleRoute() {
                     sla.status === "breach" ? "border-rose-500/40 bg-rose-950/20" : "border-amber-500/40 bg-amber-950/20"
                   }`}
                 >
-                  <p className="m-0 text-xs text-[#e5e5e5]">
+                  <div className="m-0 text-xs text-[#e5e5e5]">
                     {task.taskId} - {task.member}
-                  </p>
-                  <p className="m-0 mt-1 text-[11px] text-[#737373]">
+                  </div>
+                  <div className="m-0 mt-1 text-[11px] text-[#737373]">
                     elapsed: {formatElapsed(sla.elapsedMs)} / threshold {task.state === "sent" ? "60s" : "120s"}
-                  </p>
+                  </div>
                 </article>
               ))}
             </div>

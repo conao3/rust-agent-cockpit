@@ -67,7 +67,7 @@ export function CockpitListRoute() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">Cockpit List</h2>
-              <p className="m-0 text-sm text-slate-400">Manage cockpit entries and jump into `/agent-cockpit/:cockpit_id`.</p>
+              <div className="m-0 text-sm text-slate-400">Manage cockpit entries and jump into `/agent-cockpit/:cockpit_id`.</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" onPress={() => queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const })} isDisabled={loading || pendingId !== null} className={buttonBaseClass}>
@@ -100,9 +100,9 @@ export function CockpitListRoute() {
           </div>
 
           {error ? (
-            <p role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+            <div role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
               {error}
-            </p>
+            </div>
           ) : null}
         </section>
 
@@ -163,9 +163,9 @@ export function CockpitListRoute() {
             </table>
           </div>
           {!loading && filtered.length === 0 ? (
-            <p className="m-0 px-4 py-5 text-sm text-slate-400">No cockpit entries found.</p>
+            <div className="m-0 px-4 py-5 text-sm text-slate-400">No cockpit entries found.</div>
           ) : null}
-          {loading ? <p className="m-0 px-4 py-5 text-sm text-slate-400">Loading cockpits...</p> : null}
+          {loading ? <div className="m-0 px-4 py-5 text-sm text-slate-400">Loading cockpits...</div> : null}
         </section>
       </div>
     </div>

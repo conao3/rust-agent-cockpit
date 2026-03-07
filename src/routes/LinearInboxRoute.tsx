@@ -57,7 +57,7 @@ export function LinearInboxRoute() {
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-6 p-6 text-slate-100">
       <header className="space-y-1">
         <h2 className="m-0 text-2xl font-bold tracking-[0.02em]">Linear Inbox</h2>
-        <p className="m-0 text-sm text-slate-400">Cockpit: {cockpitId}</p>
+        <div className="m-0 text-sm text-slate-400">Cockpit: {cockpitId}</div>
       </header>
 
       <form className="grid gap-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4" onSubmit={onSubmit}>
@@ -119,7 +119,7 @@ export function LinearInboxRoute() {
         </button>
       </form>
 
-      {error ? <p className="m-0 rounded-md border border-rose-800 bg-rose-950/50 p-3 text-sm text-rose-200">{error}</p> : null}
+      {error ? <div className="m-0 rounded-md border border-rose-800 bg-rose-950/50 p-3 text-sm text-rose-200">{error}</div> : null}
 
       {response ? (
         <pre className="m-0 overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs leading-5 text-slate-200">
