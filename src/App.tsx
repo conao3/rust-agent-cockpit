@@ -167,6 +167,24 @@ function App() {
   }, [status]);
 
   useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "r"
+      ) {
+        event.preventDefault();
+        window.location.reload();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
     const host = terminalHostRef.current;
     if (!host) {
       return;
