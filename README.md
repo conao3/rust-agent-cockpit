@@ -142,6 +142,13 @@ make fmt        # format all code (nix fmt)
 make clean      # remove build artifacts
 ```
 
+### Contract Guards (Local)
+
+```bash
+pnpm check:agents-contract
+pnpm check:invoke-contract
+```
+
 ## MVP
 
 The first milestone (Phase 6) targets a **3-agent configuration**:
