@@ -64,6 +64,7 @@ Visible run hygiene (`agent-cockpit-team`):
 - `Ctrl-C` before launch
 - send command and `Enter` separately
 - confirm `task_id`, `log`, `thread.started`
+- when checking member progress, read latest `logs/codex/<task_id>/*.jsonl` first; if unavailable, fall back to pane capture and Linear evidence
 
 ## 6. Handoff Acceptance (`in_review`)
 
