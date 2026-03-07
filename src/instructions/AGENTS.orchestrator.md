@@ -144,6 +144,10 @@ For each batch:
 9. dispatch next pair when safe
 10. recompose AGENTS docs and push before next batch kickoff
 
+Batch kickoff handover requirement:
+- if prior batch leaves active runs, next batch must start with those run IDs and latest ACK/heartbeat snapshot before selecting any new issues
+- include the previous batch id and current batch id in the operator-visible kickoff report
+
 Preflight before dispatch:
 - run `git status --short`
 - classify dirty entries: known non-blocking / task-owned / unknown-conflicting

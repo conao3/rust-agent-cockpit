@@ -123,6 +123,7 @@ Before next batch:
 - run preflight `git status --short`
 - classify dirty entries; block only unknown/conflicting
 - then kickoff next batch mapping
+- in kickoff report, always include carry-over active runs (`task_id`, owner, latest ACK/heartbeat) and the new batch id
 
 Known non-blocking artifacts:
 - `src-tauri/logs/`

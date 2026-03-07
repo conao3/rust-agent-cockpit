@@ -28,6 +28,7 @@ Reinjection/recovery rules:
 - if leader run was stalled, ACK then send current step immediately
 - send ACK before long-running command
 - emit final `@Leader ... in_review|done` line before exit
+- when continuing from prior batch carry-over, first heartbeat must include the previous step checkpoint and immediate next step
 
 ## 3. Scope and Repo Hygiene
 
