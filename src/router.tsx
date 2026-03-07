@@ -1,6 +1,6 @@
 import { Link, Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { HomeRoute } from "./routes/HomeRoute";
-import { PlaceholderRoute } from "./routes/PlaceholderRoute";
+import { MvpRoute } from "./routes/MvpRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 
 const navLinkClass =
@@ -17,14 +17,14 @@ function RootLayout() {
             className={navLinkClass}
             activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
           >
-            cockpit
+            mvp
           </Link>
           <Link
-            to="/placeholder"
+            to="/cockpit"
             className={navLinkClass}
             activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
           >
-            placeholder
+            cockpit
           </Link>
           <Link
             to="/settings"
@@ -49,13 +49,13 @@ const rootRoute = createRootRoute({
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: HomeRoute,
+  component: MvpRoute,
 });
 
-const placeholderRoute = createRoute({
+const cockpitRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/placeholder",
-  component: PlaceholderRoute,
+  path: "/cockpit",
+  component: HomeRoute,
 });
 
 const settingsRoute = createRoute({
@@ -64,7 +64,7 @@ const settingsRoute = createRoute({
   component: SettingsRoute,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, placeholderRoute, settingsRoute]);
+const routeTree = rootRoute.addChildren([homeRoute, cockpitRoute, settingsRoute]);
 
 export const router = createRouter({
   routeTree,
