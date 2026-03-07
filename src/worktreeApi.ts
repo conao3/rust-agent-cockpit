@@ -15,7 +15,27 @@ export type WorktreeDeleteRequest = {
   force?: boolean;
 };
 
+export type WorktreeOpenRequest = {
+  branch: string;
+  basedir: string;
+  hook?: string;
+  deletehook?: string;
+  copyignored?: boolean;
+};
+
+export type WorktreeCloseRequest = {
+  branch: string;
+  basedir: string;
+  deleteOnClose?: boolean;
+  force?: boolean;
+};
+
 export type WorktreeListRequest = {
+  basedir: string;
+};
+
+export type WorktreeTitleInfoRequest = {
+  branch: string;
   basedir: string;
 };
 
@@ -29,6 +49,13 @@ export type WorktreeLifecycleResponse = {
 };
 
 export type WorktreeDeleteResponse = {
+  branch: string;
+  worktreeDir: string;
+  title: string;
+  removed: boolean;
+};
+
+export type WorktreeCloseResponse = {
   branch: string;
   worktreeDir: string;
   title: string;
@@ -116,7 +143,22 @@ export async function worktreeDelete(req: WorktreeDeleteRequest): Promise<Worktr
   return parseDelete(payload);
 }
 
+export async function worktreeOpen(req: WorktreeOpenRequest): Promise<WorktreeLifecycleResponse> {
+  const payload = await invoke<unknown>("worktree_open", { req });
+  return parseLifecycle(payload);
+}
+
+export async function worktreeClose(req: WorktreeCloseRequest): Promise<WorktreeCloseResponse> {
+  const payload = await invoke<unknown>("worktree_close", { req });
+  return parseDelete(payload);
+}
+
 export async function worktreeList(req: WorktreeListRequest): Promise<WorktreeListItem[]> {
   const payload = await invoke<unknown>("worktree_list", { req });
   return parseList(payload);
+}
+
+export async function worktreeTitleInfo(req: WorktreeTitleInfoRequest): Promise<WorktreeLifecycleResponse> {
+  const payload = await invoke<unknown>("worktree_title_info", { req });
+  return parseLifecycle(payload);
 }
