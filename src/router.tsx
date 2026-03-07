@@ -5,6 +5,7 @@ import { LinearInboxRoute } from "./routes/LinearInboxRoute";
 import { MvpRoute } from "./routes/MvpRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { TaskLifecycleRoute } from "./routes/TaskLifecycleRoute";
+import { WorktreeManagerRoute } from "./routes/WorktreeManagerRoute";
 
 const navLinkClass =
   "rounded-full border border-slate-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-300 transition hover:border-cyan-300 hover:text-cyan-100";
@@ -46,11 +47,20 @@ function RootLayout() {
             tasks
           </Link>
           <Link
-            to="/linear-inbox"
+            to="/agent-cockpit/$cockpit_id/inbox"
+            params={{ cockpit_id: "default" }}
             className={navLinkClass}
             activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
           >
             inbox
+          </Link>
+          <Link
+            to="/agent-cockpit/$cockpit_id/worktrees"
+            params={{ cockpit_id: "default" }}
+            className={navLinkClass}
+            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+          >
+            worktrees
           </Link>
         </nav>
       </header>
@@ -93,6 +103,20 @@ function LegacySettingsRedirect() {
   return <Navigate to="/agent-cockpit/$cockpit_id/settings" params={{ cockpit_id: "default" }} replace />;
 }
 
+function LegacyCockpitRedirect() {
+  return <Navigate to="/agent-cockpit/$cockpit_id" params={{ cockpit_id: "default" }} replace />;
+}
+
+function LegacyInboxRedirect() {
+  return <Navigate to="/agent-cockpit/$cockpit_id/inbox" params={{ cockpit_id: "default" }} replace />;
+}
+
+const legacyCockpitRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cockpit",
+  component: LegacyCockpitRedirect,
+});
+
 const legacySettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -107,18 +131,33 @@ const taskLifecycleRoute = createRoute({
 
 const linearInboxRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/linear-inbox",
+  path: "/agent-cockpit/$cockpit_id/inbox",
   component: LinearInboxRoute,
+});
+
+const legacyLinearInboxRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/linear-inbox",
+  component: LegacyInboxRedirect,
+});
+
+const worktreeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent-cockpit/$cockpit_id/worktrees",
+  component: WorktreeManagerRoute,
 });
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
   mvpRoute,
   cockpitRoute,
+  legacyCockpitRoute,
   settingsRoute,
   legacySettingsRoute,
   taskLifecycleRoute,
   linearInboxRoute,
+  legacyLinearInboxRoute,
+  worktreeRoute,
 ]);
 
 export const router = createRouter({
