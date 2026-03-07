@@ -13,11 +13,11 @@ export type AgentSettingsDocument = {
   agents: AgentSettings[];
 };
 
-export type AgentSettingsGetRequest = {
+type AgentSettingsGetRequest = {
   cockpitId: string;
 };
 
-export type AgentSettingsSaveRequest = {
+type AgentSettingsSaveRequest = {
   cockpitId: string;
   settings: AgentSettingsDocument;
 };

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type LinearMessageDecision = "delivered" | "duplicate" | "unroutable";
 
-export type LinearCommentEnvelope = {
+type LinearCommentEnvelope = {
   issueId: string;
   commentId?: string;
   body: string;

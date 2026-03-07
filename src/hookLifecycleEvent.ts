@@ -1,8 +1,8 @@
-export const hookLifecycleEventKinds = ["input_wait", "tool_running", "completed", "error"] as const;
+const hookLifecycleEventKinds = ["input_wait", "tool_running", "completed", "error"] as const;
 
-export type HookLifecycleEventKind = (typeof hookLifecycleEventKinds)[number];
+type HookLifecycleEventKind = (typeof hookLifecycleEventKinds)[number];
 
-export type HookLifecycleEvent = {
+type HookLifecycleEvent = {
   taskId: string;
   member: string;
   hookEvent: HookLifecycleEventKind;

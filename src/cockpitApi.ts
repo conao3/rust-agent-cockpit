@@ -8,15 +8,15 @@ export type CockpitDocument = {
   member: string | null;
 };
 
-export type CockpitCreateRequest = {
+type CockpitCreateRequest = {
   cockpit: CockpitDocument;
 };
 
-export type CockpitDeleteRequest = {
+type CockpitDeleteRequest = {
   id: string;
 };
 
-export type CockpitDeleteResponse = {
+type CockpitDeleteResponse = {
   id: string;
   removed: boolean;
 };

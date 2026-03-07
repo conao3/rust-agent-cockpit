@@ -3,16 +3,16 @@ import { invoke } from "@tauri-apps/api/core";
 export const lifecycleStates = ["sent", "ack", "in_progress", "done", "failed"] as const;
 
 export type LifecycleState = (typeof lifecycleStates)[number];
-export type LifecycleDecision = "applied" | "duplicate" | "stale";
+type LifecycleDecision = "applied" | "duplicate" | "stale";
 
-export type TaskRegistrationRequest = {
+type TaskRegistrationRequest = {
   taskId: string;
   member: string;
   title?: string;
   dedupeKey?: string;
 };
 
-export type TaskLifecycleTransitionRequest = {
+type TaskLifecycleTransitionRequest = {
   taskId: string;
   member: string;
   state: LifecycleState;
@@ -21,12 +21,12 @@ export type TaskLifecycleTransitionRequest = {
   source?: string;
 };
 
-export type TaskLifecycleLookupRequest = {
+type TaskLifecycleLookupRequest = {
   taskId: string;
   member: string;
 };
 
-export type LifecycleStateQueryRequest = {
+type LifecycleStateQueryRequest = {
   taskId: string;
   member: string;
 };
@@ -42,7 +42,7 @@ export type TaskLifecycleSnapshot = {
   historyLen: number;
 };
 
-export type LifecycleStateResponse = {
+type LifecycleStateResponse = {
   taskId: string;
   member: string;
   state: LifecycleState;
@@ -51,7 +51,7 @@ export type LifecycleStateResponse = {
   historyLen: number;
 };
 
-export type LifecycleIngestResponse = {
+type LifecycleIngestResponse = {
   decision: LifecycleDecision;
   taskId: string;
   member: string;

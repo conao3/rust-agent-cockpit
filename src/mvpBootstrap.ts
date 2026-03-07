@@ -1,10 +1,12 @@
-export type BootstrapValues = {
+type BootstrapValues = {
   taskId: string;
   member: string;
   cwd: string;
 };
 
-const sanitize = (value: string): string => value.trim();
+function sanitize(value: string): string {
+  return value.trim();
+}
 
 export function buildCockpitSearch(values: BootstrapValues): string {
   const params = new URLSearchParams();

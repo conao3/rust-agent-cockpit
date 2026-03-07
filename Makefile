@@ -18,6 +18,10 @@ build:
 test:
 	$(MAKE) -C src-tauri test
 
+.PHONY: lint
+lint:
+	npx knip
+
 .PHONY: fmt
 fmt:
 	nix fmt
