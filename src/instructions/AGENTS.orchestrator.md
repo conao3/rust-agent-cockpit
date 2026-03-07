@@ -63,6 +63,10 @@ Every dispatch must include:
 - `dedupe_key`
 - `timestamp`
 - current `status`
+- scope and non-scope
+- validation commands
+- SLO (`ACK<=10m`, `heartbeat<=20m` unless overridden)
+- evidence contract (`PR URL`, `SHA`, `validation`, `changed files`, `risk`)
 
 Rules:
 - one owner per `task_id` unless explicit broadcast
@@ -206,7 +210,8 @@ If two tasks are mixed into one branch/PR:
 
 Carry-over contamination check:
 - before accepting recovered in-review evidence, compare branch merge-base with `origin/master`
-- if base contains local-only docs/instruction commits, rebuild as `origin/master + task commit` and treat prior SHA as superseded
+- run `./scripts/guard_recovered_merge_base.sh <branch-or-head>` and require PASS
+- if guard fails, rebuild as `origin/master + task commit` and treat prior SHA as superseded
 
 ## 11. Audit Minimum Fields
 

@@ -22,6 +22,7 @@ Each delegation must include:
 - blocker escalation path
 - SLO (`ACK<=10m`, `heartbeat<=20m` unless overridden)
 - required evidence format
+- batch mapping (`previous_batch_id -> current_batch_id`, owner)
 
 ## 3. Batch Order
 
@@ -93,7 +94,7 @@ Branch contamination handling:
 1. split into task-dedicated branches from `origin/master`
 2. restore task-pure history
 3. rerun validations and evidence checks
-4. for carry-over recovery, verify merge-base against `origin/master`; if local-only docs/instruction base is present, rebase/rebuild to `origin/master + task commit` before merge
+4. for carry-over recovery, run `./scripts/guard_recovered_merge_base.sh <branch-or-head>` and require PASS before merge; if FAIL, rebuild to `origin/master + task commit` before merge
 
 ## 8. Closeout Gate (`done`)
 
@@ -103,6 +104,9 @@ Mark done only when:
 3. worktree removed
 4. branch cleaned up
 5. local `master` synced non-destructively
+
+Closeout timing rule:
+- if `in_review` is merge-ready, execute closeout in the same supervision cycle (no deferred closeout).
 
 ## 9. Blocker Protocol
 
@@ -138,6 +142,7 @@ Leader must keep Linear state and evidence synchronized:
 - transition states with actual progress
 - add evidence comments (PR/SHA/validation)
 - perform final `Done` transition after closeout gate
+- include batch transition and mapping snapshot in closeout comment (`LEADER-BATCH-26 -> LEADER-BATCH-27`, `MemberA=<issue>`, `MemberB=<issue>`)
 
 ## 12. UI Design Verification (Pencil MCP)
 

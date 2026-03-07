@@ -50,6 +50,7 @@ Before handoff:
 - include conflict resolution note when relevant
 - if contamination is found, assist split/rebase and resend clean evidence
 - when Leader requests carry-over branch rebuild, rebase/cherry-pick onto `origin/master` baseline and resend superseding SHA evidence
+- for recovered branches, run `./scripts/guard_recovered_merge_base.sh <branch-or-head>` before `in_review` handoff and include PASS/FAIL evidence
 
 ## 5. Evidence Contract (`in_review`)
 
@@ -60,6 +61,7 @@ Handoff must include:
 - validations and results
 - changed-files summary
 - risk note (`none` if none)
+- recovered-branch guard result when applicable
 
 Template:
 ```text
