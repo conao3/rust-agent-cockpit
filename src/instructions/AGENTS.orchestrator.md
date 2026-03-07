@@ -204,6 +204,10 @@ If two tasks are mixed into one branch/PR:
 3. reset original branch to task-pure commit
 4. refresh evidence and validations for both tasks
 
+Carry-over contamination check:
+- before accepting recovered in-review evidence, compare branch merge-base with `origin/master`
+- if base contains local-only docs/instruction commits, rebuild as `origin/master + task commit` and treat prior SHA as superseded
+
 ## 11. Audit Minimum Fields
 
 Log at minimum:

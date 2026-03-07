@@ -93,6 +93,7 @@ Branch contamination handling:
 1. split into task-dedicated branches from `origin/master`
 2. restore task-pure history
 3. rerun validations and evidence checks
+4. for carry-over recovery, verify merge-base against `origin/master`; if local-only docs/instruction base is present, rebase/rebuild to `origin/master + task commit` before merge
 
 ## 8. Closeout Gate (`done`)
 

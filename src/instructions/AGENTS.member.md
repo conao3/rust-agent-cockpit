@@ -49,6 +49,7 @@ Before handoff:
 - report updated SHA after rewrite/rebase
 - include conflict resolution note when relevant
 - if contamination is found, assist split/rebase and resend clean evidence
+- when Leader requests carry-over branch rebuild, rebase/cherry-pick onto `origin/master` baseline and resend superseding SHA evidence
 
 ## 5. Evidence Contract (`in_review`)
 
