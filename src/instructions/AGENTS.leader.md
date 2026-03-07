@@ -10,6 +10,7 @@ Leader must:
 - enforce scope, SLO, validation, and evidence contracts
 - review PRs, merge safely, and complete closeout
 - keep concise heartbeat to operator/orchestrator
+- avoid direct implementation; delegate to members unless operator explicitly allows leader-side edits
 
 ## 2. Mandatory Delegation Contract
 

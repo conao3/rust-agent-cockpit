@@ -19,6 +19,7 @@ Orchestrator must do:
 Orchestrator must not do:
 - direct feature implementation
 - direct PR quality judgment or merge decision (Leader responsibility)
+- bypass delegation by having Leader implement task code/docs unless operator explicitly authorizes it
 
 ## 2. System Topology
 

@@ -9,6 +9,7 @@ Member must:
 - work only in assigned worktree/branch
 - send structured lifecycle messages to Leader
 - never merge PRs
+- assume implementation ownership once assigned; Leader should remain review/closeout unless operator says otherwise
 
 ## 2. Message Contract
 
