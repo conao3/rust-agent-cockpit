@@ -1,4 +1,5 @@
 import { useReducer, type ChangeEvent, type FormEvent } from "react";
+import { Button, Input, Label, TextField } from "react-aria-components";
 import ReactFlow, {
   Background,
   Controls,
@@ -80,6 +81,12 @@ const nodePositions = [
 ];
 
 const fallbackNodePosition = { x: 160, y: 130 };
+
+const controlClassName =
+  "rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none transition focus:border-cyan-300";
+
+const buttonClassName =
+  "rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none transition hover:border-cyan-300 hover:text-cyan-100 focus-visible:border-cyan-300";
 
 export function buildFlowNodes(nodes: GraphNode[]): Node[] {
   return nodes.map((node, index) => ({
@@ -255,8 +262,12 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
     };
 
   return (
-    <div className="connection-manager">
-      <div className="connection-graph" aria-label="connection graph" data-testid="connection-graph">
+    <div className="flex h-full flex-col gap-2.5 p-2.5">
+      <div
+        className="connection-graph h-[220px] overflow-hidden rounded-lg border border-slate-800 bg-slate-950"
+        aria-label="connection graph"
+        data-testid="connection-graph"
+      >
         <ReactFlow
           fitView
           nodes={flowNodes}
@@ -271,10 +282,10 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
         </ReactFlow>
       </div>
 
-      <form className="connection-form" onSubmit={handleSubmit}>
-        <label className="connection-field">
+      <form className="grid grid-cols-2 items-end gap-2" onSubmit={handleSubmit}>
+        <label className="flex flex-col gap-1 text-xs uppercase tracking-[0.03em] text-slate-300">
           source
-          <select value={state.draft.fromId} onChange={handleDraftChange("fromId")}>
+          <select value={state.draft.fromId} onChange={handleDraftChange("fromId")} className={controlClassName}>
             {nodes.map((node) => (
               <option key={node.id} value={node.id}>
                 {node.label}
@@ -283,9 +294,9 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
           </select>
         </label>
 
-        <label className="connection-field">
+        <label className="flex flex-col gap-1 text-xs uppercase tracking-[0.03em] text-slate-300">
           target
-          <select value={state.draft.toId} onChange={handleDraftChange("toId")}>
+          <select value={state.draft.toId} onChange={handleDraftChange("toId")} className={controlClassName}>
             {nodes.map((node) => (
               <option key={node.id} value={node.id}>
                 {node.label}
@@ -294,52 +305,64 @@ export function ConnectionManager({ nodes }: ConnectionManagerProps) {
           </select>
         </label>
 
-        <label className="connection-field connection-field-wide">
-          description
-          <input
+        <TextField className="col-span-full flex flex-col gap-1">
+          <Label className="text-xs uppercase tracking-[0.03em] text-slate-300">description</Label>
+          <Input
             type="text"
             placeholder="optional"
             value={state.draft.description}
             onChange={handleDraftChange("description")}
+            className={controlClassName}
           />
-        </label>
+        </TextField>
 
-        <div className="connection-actions">
-          <button type="submit">{submitLabel}</button>
+        <div className="flex gap-2">
+          <Button type="submit" className={buttonClassName}>
+            {submitLabel}
+          </Button>
           {state.editingId ? (
-            <button type="button" onClick={() => dispatch({ type: "cancelEdit" })}>
+            <Button type="button" className={buttonClassName} onPress={() => dispatch({ type: "cancelEdit" })}>
               cancel
-            </button>
+            </Button>
           ) : null}
         </div>
       </form>
 
       {state.error ? (
-        <p className="connection-error" role="status" aria-live="polite">
+        <p className="m-0 text-sm text-red-300" role="status" aria-live="polite">
           {state.error}
         </p>
       ) : null}
 
-      <ul className="connection-list" aria-label="connection list">
+      <ul className="m-0 flex list-none flex-col gap-2 overflow-auto p-0" aria-label="connection list">
         {state.connections.map((connection) => (
-          <li key={connection.id} className="connection-item">
+          <li
+            key={connection.id}
+            className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 p-2"
+          >
             <div>
               <strong>{idToLabel.get(connection.fromId) ?? connection.fromId}</strong>
-              <span className="connection-arrow" aria-hidden>
+              <span className="mx-1.5 text-slate-400" aria-hidden>
                 →
               </span>
               <strong>{idToLabel.get(connection.toId) ?? connection.toId}</strong>
-              <p className="connection-description">
-                {connection.description || "no description"}
-              </p>
+              <p className="m-0 mt-1 text-xs text-slate-400">{connection.description || "no description"}</p>
             </div>
-            <div className="connection-actions">
-              <button type="button" onClick={() => dispatch({ type: "beginEdit", id: connection.id })}>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                className={buttonClassName}
+                onPress={() => dispatch({ type: "beginEdit", id: connection.id })}
+              >
                 edit
-              </button>
-              <button type="button" onClick={() => dispatch({ type: "remove", id: connection.id })}>
+              </Button>
+              <Button
+                type="button"
+                className={buttonClassName}
+                onPress={() => dispatch({ type: "remove", id: connection.id })}
+              >
                 remove
-              </button>
+              </Button>
             </div>
           </li>
         ))}

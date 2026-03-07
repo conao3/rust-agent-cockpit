@@ -64,6 +64,7 @@ export const resolvePtyCreateContext = (search: string): PtyCreateContext => {
     member,
   };
 };
+
 type WindowId = "connections" | "terminal";
 
 type ManagedWindow = {
@@ -99,6 +100,7 @@ const initialWindows: ManagedWindow[] = [
     height: 440,
   },
 ];
+
 function App() {
   const desktopRef = useRef<HTMLDivElement | null>(null);
   const terminalHostRef = useRef<HTMLDivElement | null>(null);
@@ -143,17 +145,17 @@ function App() {
     const bounds = desktop?.getBoundingClientRect();
 
     updateWindow(id, (window) => {
-      const minWidth = MIN_WINDOW_WIDTH;
-      const minHeight = MIN_WINDOW_HEIGHT;
-      const maxWidth = bounds ? Math.max(minWidth, bounds.width - window.x) : Number.POSITIVE_INFINITY;
+      const maxWidth = bounds
+        ? Math.max(MIN_WINDOW_WIDTH, bounds.width - window.x)
+        : Number.POSITIVE_INFINITY;
       const maxHeight = bounds
-        ? Math.max(minHeight, bounds.height - window.y)
+        ? Math.max(MIN_WINDOW_HEIGHT, bounds.height - window.y)
         : Number.POSITIVE_INFINITY;
 
       return {
         ...window,
-        width: Math.min(Math.max(minWidth, nextWidth), maxWidth),
-        height: Math.min(Math.max(minHeight, nextHeight), maxHeight),
+        width: Math.min(Math.max(MIN_WINDOW_WIDTH, nextWidth), maxWidth),
+        height: Math.min(Math.max(MIN_WINDOW_HEIGHT, nextHeight), maxHeight),
       };
     });
   };
@@ -296,8 +298,11 @@ function App() {
   }, []);
 
   return (
-    <main className="app">
-      <div className="desktop" ref={desktopRef}>
+    <main className="box-border h-full w-full p-2.5 md:p-0">
+      <div
+        ref={desktopRef}
+        className="relative h-full w-full overflow-hidden rounded-xl bg-[radial-gradient(circle_at_20%_20%,#1f2937_0%,transparent_44%),radial-gradient(circle_at_80%_80%,#0f172a_0%,transparent_42%),#020617] md:rounded-none"
+      >
         {windows.map((window) => (
           <Window
             key={window.id}
@@ -315,7 +320,7 @@ function App() {
             {window.id === "connections" ? (
               <ConnectionManager nodes={[...graphNodes]} />
             ) : (
-              <div className="terminal-host" ref={terminalHostRef} />
+              <div ref={terminalHostRef} className="h-full w-full" />
             )}
           </Window>
         ))}
