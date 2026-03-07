@@ -25,6 +25,7 @@ const COCKPIT_HOOK_SCRIPT_RELATIVE_PATH: &str = ".claude/hooks/cockpit-monitor.s
 const COCKPIT_CLAUDE_SETTINGS_RELATIVE_PATH: &str = ".claude/settings.json";
 const COCKPIT_HOOK_SOURCE: &str = "claude_hook";
 const AGENT_SETTINGS_RELATIVE_PATH: &str = ".agent-cockpit/agent-settings.toml";
+const COCKPITS_RELATIVE_DIR: &str = ".agent-cockpit/cockpits";
 const AGENT_SETTINGS_VERSION: u32 = 1;
 #[cfg(desktop)]
 const DEV_MENU_ID_RELOAD: &str = "developer.reload";
@@ -417,6 +418,39 @@ struct AgentSettingsGetRequest {}
 #[serde(rename_all = "camelCase")]
 struct AgentSettingsSaveRequest {
     settings: AgentSettingsDocument,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CockpitDocument {
+    id: String,
+    title: String,
+    cwd: String,
+    task_id: Option<String>,
+    member: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CockpitListRequest {}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CockpitCreateRequest {
+    cockpit: CockpitDocument,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CockpitDeleteRequest {
+    id: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CockpitDeleteResponse {
+    id: String,
+    removed: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1126,6 +1160,113 @@ fn write_file_if_changed(path: &Path, body: &[u8]) -> Result<(), String> {
 
 fn agent_settings_path(cockpit_root: &Path) -> PathBuf {
     cockpit_root.join(AGENT_SETTINGS_RELATIVE_PATH)
+}
+
+fn cockpits_dir_path(cockpit_root: &Path) -> PathBuf {
+    cockpit_root.join(COCKPITS_RELATIVE_DIR)
+}
+
+fn validate_cockpit_id(id: &str) -> Result<String, String> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err("cockpit.id must not be empty".to_string());
+    }
+    if id
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.')
+    {
+        return Ok(id.to_string());
+    }
+    Err("cockpit.id must contain only [A-Za-z0-9._-]".to_string())
+}
+
+fn normalize_optional_cockpit_field(value: Option<String>, field: &str) -> Result<Option<String>, String> {
+    match value {
+        Some(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                return Err(format!("cockpit.{field} must not be blank when set"));
+            }
+            Ok(Some(trimmed.to_string()))
+        }
+        None => Ok(None),
+    }
+}
+
+fn normalize_cockpit_document(cockpit: CockpitDocument) -> Result<CockpitDocument, String> {
+    let id = validate_cockpit_id(&cockpit.id)?;
+    let title = cockpit.title.trim();
+    if title.is_empty() {
+        return Err("cockpit.title must not be empty".to_string());
+    }
+    let cwd = cockpit.cwd.trim();
+    if cwd.is_empty() {
+        return Err("cockpit.cwd must not be empty".to_string());
+    }
+    Ok(CockpitDocument {
+        id,
+        title: title.to_string(),
+        cwd: cwd.to_string(),
+        task_id: normalize_optional_cockpit_field(cockpit.task_id, "taskId")?,
+        member: normalize_optional_cockpit_field(cockpit.member, "member")?,
+    })
+}
+
+fn cockpit_file_path(cockpit_root: &Path, cockpit_id: &str) -> PathBuf {
+    cockpits_dir_path(cockpit_root).join(format!("{cockpit_id}.json"))
+}
+
+fn read_cockpit_file(path: &Path) -> Result<CockpitDocument, String> {
+    let body = fs::read_to_string(path)
+        .map_err(|e| format!("read cockpit failed for {}: {e}", path.display()))?;
+    let cockpit: CockpitDocument = serde_json::from_str(&body)
+        .map_err(|e| format!("parse cockpit failed for {}: {e}", path.display()))?;
+    normalize_cockpit_document(cockpit)
+}
+
+fn list_cockpits(cockpit_root: &Path) -> Result<Vec<CockpitDocument>, String> {
+    let dir = cockpits_dir_path(cockpit_root);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut cockpits = Vec::new();
+    for entry in fs::read_dir(&dir).map_err(|e| format!("read cockpits dir failed: {e}"))? {
+        let entry = entry.map_err(|e| format!("read cockpits dir entry failed: {e}"))?;
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+        cockpits.push(read_cockpit_file(&path)?);
+    }
+    cockpits.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(cockpits)
+}
+
+fn create_cockpit(cockpit_root: &Path, cockpit: CockpitDocument) -> Result<CockpitDocument, String> {
+    let cockpit = normalize_cockpit_document(cockpit)?;
+    let path = cockpit_file_path(cockpit_root, &cockpit.id);
+    if path.exists() {
+        return Err(format!("cockpit already exists: {}", cockpit.id));
+    }
+    let body = serde_json::to_string_pretty(&cockpit)
+        .map_err(|e| format!("serialize cockpit failed: {e}"))?;
+    let body_with_newline = if body.ends_with('\n') {
+        body.into_bytes()
+    } else {
+        format!("{body}\n").into_bytes()
+    };
+    write_file_if_changed(&path, &body_with_newline)?;
+    Ok(cockpit)
+}
+
+fn delete_cockpit(cockpit_root: &Path, cockpit_id: &str) -> Result<bool, String> {
+    let id = validate_cockpit_id(cockpit_id)?;
+    let path = cockpit_file_path(cockpit_root, &id);
+    if !path.exists() {
+        return Ok(false);
+    }
+    fs::remove_file(&path).map_err(|e| format!("delete cockpit failed for {}: {e}", path.display()))?;
+    Ok(true)
 }
 
 fn validate_agent_settings(settings: &AgentSettingsDocument) -> Result<(), String> {
@@ -2248,6 +2389,30 @@ fn agent_settings_save(req: AgentSettingsSaveRequest) -> Result<AgentSettingsDoc
 }
 
 #[tauri::command]
+fn cockpit_list(req: CockpitListRequest) -> Result<Vec<CockpitDocument>, String> {
+    let _ = req;
+    let cockpit_root =
+        std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
+    list_cockpits(&cockpit_root)
+}
+
+#[tauri::command]
+fn cockpit_create(req: CockpitCreateRequest) -> Result<CockpitDocument, String> {
+    let cockpit_root =
+        std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
+    create_cockpit(&cockpit_root, req.cockpit)
+}
+
+#[tauri::command]
+fn cockpit_delete(req: CockpitDeleteRequest) -> Result<CockpitDeleteResponse, String> {
+    let cockpit_root =
+        std::env::current_dir().map_err(|e| format!("resolve current_dir failed: {e}"))?;
+    let id = validate_cockpit_id(&req.id)?;
+    let removed = delete_cockpit(&cockpit_root, &id)?;
+    Ok(CockpitDeleteResponse { id, removed })
+}
+
+#[tauri::command]
 fn pty_create(
     app: AppHandle,
     manager: State<'_, PtyManager>,
@@ -2705,6 +2870,9 @@ pub fn run() {
             claude_prepare_worktree_hooks,
             agent_settings_get,
             agent_settings_save,
+            cockpit_list,
+            cockpit_create,
+            cockpit_delete,
             monitoring_ingest_lifecycle_event,
             monitoring_get_lifecycle_state,
             task_register_definition,
@@ -3111,6 +3279,88 @@ mod tests {
         fs::write(&settings_path, "version = \n[[agents]]\nid = [").unwrap();
         let err = read_agent_settings(&root).unwrap_err();
         assert!(err.contains("parse settings failed"));
+    }
+
+    fn sample_cockpit() -> CockpitDocument {
+        CockpitDocument {
+            id: "con-103-main".to_string(),
+            title: "CON-103 cockpit".to_string(),
+            cwd: "/tmp/repo/.wt/con-103".to_string(),
+            task_id: Some("CON-103".to_string()),
+            member: Some("MemberA".to_string()),
+        }
+    }
+
+    #[test]
+    fn cockpit_list_defaults_when_dir_missing() {
+        let root = std::env::temp_dir().join(format!("con103-cockpits-missing-{}", now_millis()));
+        let listed = list_cockpits(&root).unwrap();
+        assert!(listed.is_empty());
+    }
+
+    #[test]
+    fn cockpit_create_persists_and_list_sorts() {
+        let root = std::env::temp_dir().join(format!("con103-cockpits-roundtrip-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        let first = create_cockpit(
+            &root,
+            CockpitDocument {
+                id: "con-103-b".to_string(),
+                ..sample_cockpit()
+            },
+        )
+        .unwrap();
+        let second = create_cockpit(
+            &root,
+            CockpitDocument {
+                id: "con-103-a".to_string(),
+                ..sample_cockpit()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(first.id, "con-103-b");
+        assert_eq!(second.id, "con-103-a");
+        let listed = list_cockpits(&root).unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, "con-103-a");
+        assert_eq!(listed[1].id, "con-103-b");
+        assert!(cockpit_file_path(&root, "con-103-a").exists());
+    }
+
+    #[test]
+    fn cockpit_create_rejects_invalid_and_duplicate_inputs() {
+        let root = std::env::temp_dir().join(format!("con103-cockpits-invalid-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+
+        let err = create_cockpit(
+            &root,
+            CockpitDocument {
+                id: "bad/id".to_string(),
+                ..sample_cockpit()
+            },
+        )
+        .unwrap_err();
+        assert!(err.contains("cockpit.id must contain only"));
+
+        let _ = create_cockpit(&root, sample_cockpit()).unwrap();
+        let err = create_cockpit(&root, sample_cockpit()).unwrap_err();
+        assert!(err.contains("cockpit already exists"));
+    }
+
+    #[test]
+    fn cockpit_delete_removes_file_and_is_idempotent() {
+        let root = std::env::temp_dir().join(format!("con103-cockpits-delete-{}", now_millis()));
+        fs::create_dir_all(&root).unwrap();
+        let cockpit = create_cockpit(&root, sample_cockpit()).unwrap();
+        assert!(cockpit_file_path(&root, &cockpit.id).exists());
+
+        let removed = delete_cockpit(&root, &cockpit.id).unwrap();
+        assert!(removed);
+        assert!(!cockpit_file_path(&root, &cockpit.id).exists());
+
+        let removed_again = delete_cockpit(&root, &cockpit.id).unwrap();
+        assert!(!removed_again);
     }
 
     #[test]
