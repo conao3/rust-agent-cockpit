@@ -17,9 +17,9 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter, Manager, State};
 #[cfg(desktop)]
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 const COCKPIT_HOOK_SCRIPT_RELATIVE_PATH: &str = ".claude/hooks/cockpit-monitor.sh";
 const COCKPIT_CLAUDE_SETTINGS_RELATIVE_PATH: &str = ".claude/settings.json";
@@ -480,6 +480,12 @@ struct WorktreeDeleteRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct WorktreeListRequest {
+    basedir: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct WorktreeTitleInfoRequest {
     branch: String,
     basedir: String,
@@ -512,6 +518,16 @@ struct WorktreeDeleteResponse {
     worktree_dir: String,
     title: String,
     removed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeListItem {
+    branch: String,
+    worktree_dir: String,
+    title: String,
+    opened: bool,
+    exists: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -599,6 +615,11 @@ fn validate_worktree_branch(branch: &str) -> Result<String, String> {
 }
 
 fn resolve_worktree_dir(basedir: &str, branch: &str) -> Result<PathBuf, String> {
+    let base_path = resolve_basedir(basedir)?;
+    Ok(base_path.join(worktree_slug(branch)))
+}
+
+fn resolve_basedir(basedir: &str) -> Result<PathBuf, String> {
     let base = basedir.trim();
     if base.is_empty() {
         return Err("basedir must not be empty".to_string());
@@ -611,7 +632,7 @@ fn resolve_worktree_dir(basedir: &str, branch: &str) -> Result<PathBuf, String> 
             .map_err(|e| format!("resolve current_dir failed: {e}"))?
             .join(base_path)
     };
-    Ok(base_path.join(worktree_slug(branch)))
+    Ok(base_path)
 }
 
 fn git_command(args: &[&str]) -> Result<std::process::Output, String> {
@@ -817,6 +838,88 @@ fn remove_worktree(
         ));
     }
     Ok(true)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GitWorktreeRecord {
+    worktree_dir: String,
+    branch: Option<String>,
+}
+
+fn parse_git_worktree_list_porcelain(stdout: &str) -> Result<Vec<GitWorktreeRecord>, String> {
+    let mut records = Vec::new();
+    let mut current_worktree: Option<String> = None;
+    let mut current_branch: Option<String> = None;
+
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if let Some(worktree_dir) = current_worktree.take() {
+                records.push(GitWorktreeRecord {
+                    worktree_dir,
+                    branch: current_branch.take(),
+                });
+            }
+            current_branch = None;
+            continue;
+        }
+        if let Some(path) = trimmed.strip_prefix("worktree ") {
+            current_worktree = Some(path.trim().to_string());
+            continue;
+        }
+        if let Some(branch_ref) = trimmed.strip_prefix("branch refs/heads/") {
+            current_branch = Some(branch_ref.trim().to_string());
+        }
+    }
+
+    if let Some(worktree_dir) = current_worktree.take() {
+        records.push(GitWorktreeRecord {
+            worktree_dir,
+            branch: current_branch.take(),
+        });
+    }
+
+    if records.is_empty() {
+        return Err("git worktree list returned no records".to_string());
+    }
+    Ok(records)
+}
+
+fn list_worktrees(
+    repo_root: &Path,
+    basedir: &Path,
+    opened_sessions: &HashSet<String>,
+) -> Result<Vec<WorktreeListItem>, String> {
+    let output = git_command_in_dir(repo_root, &["worktree", "list", "--porcelain"])?;
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree list failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| format!("parse git worktree list output failed: {e}"))?;
+    let mut items = Vec::new();
+    let basedir = fs::canonicalize(basedir).unwrap_or_else(|_| basedir.to_path_buf());
+    for record in parse_git_worktree_list_porcelain(&stdout)? {
+        let worktree_dir = PathBuf::from(record.worktree_dir.trim());
+        if !worktree_dir.starts_with(&basedir) {
+            continue;
+        }
+        let Some(branch) = record.branch else {
+            continue;
+        };
+        let key = worktree_dir.to_string_lossy().to_string();
+        items.push(WorktreeListItem {
+            branch: branch.clone(),
+            worktree_dir: key.clone(),
+            title: branch,
+            opened: opened_sessions.contains(&key),
+            exists: worktree_dir.exists(),
+        });
+    }
+    items.sort_by(|a, b| a.branch.cmp(&b.branch));
+    Ok(items)
 }
 
 fn now_millis() -> u64 {
@@ -2379,6 +2482,23 @@ fn worktree_delete(req: WorktreeDeleteRequest) -> Result<WorktreeDeleteResponse,
 }
 
 #[tauri::command]
+fn worktree_list(
+    manager: State<'_, WorktreeManager>,
+    req: WorktreeListRequest,
+) -> Result<Vec<WorktreeListItem>, String> {
+    let repo_root = ensure_git_root()?;
+    let basedir = resolve_basedir(&req.basedir)?;
+    let opened_sessions = manager
+        .sessions
+        .lock()
+        .map_err(|_| "failed to lock worktree sessions".to_string())?
+        .keys()
+        .cloned()
+        .collect::<HashSet<_>>();
+    list_worktrees(&repo_root, &basedir, &opened_sessions)
+}
+
+#[tauri::command]
 fn worktree_title_info(req: WorktreeTitleInfoRequest) -> Result<WorktreeLifecycleResponse, String> {
     let branch = validate_worktree_branch(&req.branch)?;
     let worktree_dir = resolve_worktree_dir(&req.basedir, &branch)?;
@@ -2521,6 +2641,7 @@ pub fn run() {
             worktree_open,
             worktree_close,
             worktree_delete,
+            worktree_list,
             worktree_title_info,
             claude_prepare_worktree_hooks,
             agent_settings_get,
@@ -3057,6 +3178,64 @@ mod tests {
         assert!(removed);
         assert!(repo_root.join(".wt/.deletehook-ran").exists());
         assert!(!worktree_dir.exists());
+    }
+
+    #[test]
+    fn parse_git_worktree_list_porcelain_parses_branch_records() {
+        let input = "\
+worktree /tmp/repo
+HEAD 123456
+branch refs/heads/main
+
+worktree /tmp/repo/.wt/con-71
+HEAD abcdef
+branch refs/heads/feature/con-71
+";
+        let records = parse_git_worktree_list_porcelain(input).unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].branch.as_deref(), Some("main"));
+        assert_eq!(records[1].branch.as_deref(), Some("feature/con-71"));
+    }
+
+    #[test]
+    fn parse_git_worktree_list_porcelain_fails_on_empty_output() {
+        let err = parse_git_worktree_list_porcelain("").unwrap_err();
+        assert!(err.contains("returned no records"));
+    }
+
+    #[test]
+    fn list_worktrees_returns_basedir_entries_with_open_state() {
+        let repo_root = init_temp_repo("con71-worktree-list");
+        let basedir = repo_root.join(".wt");
+        fs::create_dir_all(&basedir).unwrap();
+
+        let (a_dir, _) = ensure_worktree_created(
+            &repo_root,
+            "feature/con-71-a",
+            basedir.to_str().unwrap(),
+            false,
+            None,
+        )
+        .unwrap();
+        let (_b_dir, _) = ensure_worktree_created(
+            &repo_root,
+            "feature/con-71-b",
+            basedir.to_str().unwrap(),
+            false,
+            None,
+        )
+        .unwrap();
+
+        let mut opened = HashSet::new();
+        opened.insert(a_dir.to_string_lossy().to_string());
+        let entries = list_worktrees(&repo_root, &basedir, &opened).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries
+            .iter()
+            .any(|entry| entry.branch == "feature/con-71-a" && entry.opened));
+        assert!(entries
+            .iter()
+            .any(|entry| entry.branch == "feature/con-71-b" && !entry.opened));
     }
 
     #[test]
