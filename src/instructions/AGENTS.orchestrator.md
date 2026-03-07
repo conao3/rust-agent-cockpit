@@ -1,45 +1,63 @@
 # AGENTS.orchestrator.md
 
-Canonical backend policy for agent-cockpit orchestration.
+Canonical backend playbook for agent-cockpit orchestration.
+This document is written so any operator can reproduce orchestrator duties end-to-end.
 
-## A. Scope of Orchestrator
+## 1. Mission and Boundary
 
-Orchestrator responsibilities:
+Orchestrator mission:
+- keep the delivery loop moving continuously
+- route work unambiguously
+- enforce lifecycle/SLO/evidence contracts
+- ensure closeout quality and cleanup
 
-- strict routing and dispatch
-- run lifecycle state management
-- dedupe, ownership lock, retry, reconciliation
-- heartbeat/liveness monitoring
-- evidence/audit logging
+Orchestrator must do:
+- dispatch, monitoring, recovery, and audit logging
+- task lifecycle management across Linear and tmux execution
+- Leader supervision handoff and batch progression control
 
-Non-responsibilities:
+Orchestrator must not do:
+- direct feature implementation
+- direct PR merge judgment (Leader responsibility)
 
-- no feature implementation
-- no PR quality judgment or merge decision (Leader responsibility)
+## 2. System Topology
 
-## B. Run Contract
+Execution topology:
+- `You -> agent-cockpit backend (orchestrator) -> Leader -> MemberA, MemberB`
 
-A run is identified by `task_id` and must keep:
+tmux session topology (team):
+- session: `agent-cockpit-team`
+- panes:
+  - `0`: Leader
+  - `1`: MemberA
+  - `2`: MemberB
 
+Server/dev runtime:
+- session: `agent-cockpit-server`
+- `make dev` should stay running there
+
+## 3. Run State Contract
+
+A run is keyed by `task_id` (typically Linear issue key like `CON-85`).
+
+Required fields:
 - owner: `MemberA` or `MemberB`
 - workspace: `./.wt/<feature-name>`
 - status: `queued|sent|acknowledged|in_progress|in_review|done|failed`
-- evidence bundle: PR URL, head SHA, validations, changed-files summary
+- evidence: PR URL, head SHA, validations, changed-files summary
+- timing: ACK timestamp, heartbeat timestamp
 
-Transition is monotonic; ignore stale/out-of-order events.
+State transitions are monotonic.
+Ignore stale or out-of-order events.
 
-## C. Routing Grammar
+## 4. Dispatch Protocol
 
-Accepted directives:
-
+Allowed directives:
 - `@MemberA: <message>`
 - `@MemberB: <message>`
-- `@AllMembers: <message>` (explicit broadcast only)
+- `@AllMembers: <message>` only for explicit broadcast
 
-Ambiguous/missing target must be rejected.
-
-## D. Required Dispatch Metadata
-
+Every dispatch must include:
 - `message_id` (UUID)
 - `task_id`
 - `from=Leader`
@@ -50,133 +68,162 @@ Ambiguous/missing target must be rejected.
 - `timestamp`
 - current `status`
 
-## E. Delivery and Ownership Rules
+Dispatch rules:
+- one owner per `task_id` unless explicit broadcast
+- no ambiguous target
+- no dual assignment of same task
 
-1. one target only unless explicit broadcast
-2. text send and submit action are separated
-3. ownership lock: one active owner per `task_id`
-4. ACK timeout => immediate same-pane reinjection (same owner)
-5. bounded retries with backoff
-6. reassignment only with explicit Leader override
+## 5. tmux Operation Rules
 
-## F. Visibility Rules (tmux)
+Visible-run launch hygiene:
+1. sanitize pane (`Ctrl-C`)
+2. send command text
+3. send `Enter` as a separate action
 
-For operator-visible runs (`agent-cockpit-team`):
+Important input note:
+- command text and submit must be separate operations
+- for this environment, treat `Enter` as an explicit dedicated send step
 
-- sanitize pane input (`Ctrl-C`) before dispatch
-- launch one clean command
-- start confirmation requires `task_id`, `log`, and `thread.started`
-- monitor SLO: ACK <= 10m, heartbeat <= 20m (unless overridden)
-- do not use self-referential leader-log tailing as the primary control loop for recovery decisions
-
-Preferred runner:
-
+Preferred visible runner:
 ```bash
 ./scripts/codex_exec_visible.sh <task-id> "<prompt>"
 ```
 
-Recovery priority when a leader run stalls:
+Launch is valid only after confirmation includes:
+- `task_id`
+- `log`
+- `thread.started`
 
+## 6. SLO and Recovery
+
+Default SLO:
+- ACK <= 10m
+- heartbeat <= 20m
+
+Recovery sequence for stalled run:
 1. verify pane/process liveness
-2. stop the stalled leader run
-3. reinject explicit recovery tasks to target member panes with same `task_id`
-4. resume leader supervision after member ACK/heartbeat is re-established
+2. stop stalled Leader/member run
+3. reinject same `task_id` to same owner first
+4. reassignment only with explicit Leader override
+5. continue supervision after ACK/heartbeat recovery
 
-## G. Acceptance Rules
+Do not use self-log tailing alone as recovery strategy.
+Recover from member panes directly.
 
-Accept `in_review` only with complete evidence bundle.
+## 7. Acceptance and Closeout Gates
 
-If branch rewrite/rebase changes SHA:
+`in_review` is accepted only with complete evidence:
+- PR URL
+- head SHA
+- validations and results
+- changed-files summary
 
-- require refreshed evidence comment with new SHA
-- if prior SHA was wrong, require explicit superseding correction
+If SHA changes due rebase/rewrite:
+- require superseding evidence
+- require explicit correction when prior SHA was wrong
 
-If a recovery run completes implementation but misses the final `@Leader ... in_review` line:
-
-- do not treat terminal completion alone as accepted handoff
-- require Leader to record an evidence checkpoint (PR URL, SHA, validations, changed files) in Linear before any closeout action
-
-## H. Closeout Gate
-
-`done` only when all pass:
-
+`done` gate requires all:
 1. PR merged
 2. Linear moved to `Done` or `Duplicate` with link
 3. worktree removed
-4. feature branch cleanup complete
+4. feature branch cleaned up
 5. local `master` synced non-destructively
 
 Safety rules:
-
-- no destructive reset
-- no worktree removal on unmerged PR
+- no destructive git reset
+- no worktree removal before merge
 - no branch delete before worktree detach
-- cleanup actions are state-based: if no task worktree/branch exists, record as already-clean and continue (do not fail closeout)
+- if already cleaned, record as already-clean and continue
 
-## I. Blocker Handling
+## 8. Batch Loop (What Orchestrator Does Repeatedly)
 
-If required checks fail:
-
-- keep issue in `In Review`
-- emit blocker heartbeat
-- dispatch focused remediation to owner
-- require fresh green required checks before merge
-
-Known failure pattern:
-
-- CI error `Unable to locate executable file: pnpm`
-- validate setup ordering so `pnpm` is available before dependent steps
-
-## J. Batch Policy
-
-Every batch follows:
-
-1. closeout-first sweep
-2. if none in-review, pick exactly two non-overlapping actionable issues
+For every batch:
+1. closeout-first sweep for all `In Review`
+2. if no in-review work, select exactly two non-overlapping actionable issues
 3. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
-4. enforce full contract (scope/validation/SLO/evidence)
-5. recompose AGENTS docs as one coherent set before next batch
-6. run preflight repo check (`git status --short`) and classify dirty entries before dispatch (task-owned / operator-owned / unknown)
+4. dispatch with full scope/non-scope/validation/evidence contract
+5. supervise ACK/heartbeat and recover if needed
+6. close out completed issue immediately even if sibling still running
+7. after closeout, dispatch next pair without waiting for new batch boundary when safe
+8. before next batch kickoff, recompose AGENTS docs coherently and commit/push
 
-Preflight handling rule:
+Preflight before dispatch:
+- run `git status --short`
+- classify dirty entries as:
+  - known non-blocking runtime/operator (e.g. `src-tauri/logs/`, `docs/design-pencil.pen`)
+  - task-owned
+  - unknown/conflicting
+- block and escalate only unknown/conflicting entries
 
-- known operator/runtime untracked entries (for example `docs/design-pencil.pen`, `src-tauri/logs/`) are classified as non-blocking and must not stop the batch
-- stop and escalate only for unknown or task-conflicting dirty entries
+## 9. Linear Task Management (Required)
 
-In mixed-progress batches:
+All orchestrated work must be tracked in Linear.
 
-- if one issue reaches `in_review` earlier, switch that issue to immediate closeout flow without blocking the sibling issue run
-- continue monitoring the remaining sibling run against the same ACK/heartbeat SLO and evidence rules
+### 9.1 Task Registration Policy
 
-After closeout completion inside a batch:
+When new work appears (error report, feature request, regression):
+1. create a Linear issue first
+2. include reproducible context and acceptance criteria
+3. define required validations
+4. mark scope/non-scope
+5. then dispatch to Leader
 
-- it is valid to dispatch the next two non-overlapping issues in the same batch
-- when those runs are already spawned, the next batch must monitor/recover those active runs first (no duplicate re-dispatch)
+No untracked task should be dispatched.
 
-Branch contamination recovery rule:
+### 9.2 Minimum Issue Template
 
-- if two task commits are mixed into one branch/PR, split immediately:
-  1) create dedicated branch from `origin/master` for the misplaced task
-  2) cherry-pick misplaced commit to dedicated branch
-  3) reset original branch to task-pure commit
-  4) verify each PR changed-files scope before setting `in_review`
+Use this minimum structure when creating a new issue:
+- Title: concise action statement
+- Description:
+  - Background
+  - Problem statement
+  - Reproduction steps
+  - Expected behavior
+  - Proposed scope
+  - Non-scope
+  - Required validation commands
+  - Definition of Done
+- Labels: component + type (`bug`, `infra`, `frontend`, etc.)
+- Assignee: Leader (or left unassigned until planning)
+- State: `Todo`/`Backlog` initially
 
-## K. Audit Fields
+### 9.3 Orchestrator Workflow with Linear
 
-Log minimum fields:
+Lifecycle mapping:
+- `Todo/In Progress`: ready for assignment or actively implemented
+- `In Review`: PR exists, waiting review/merge gate
+- `Done`: merged and closeout complete
+- `Duplicate`: duplicate confirmed with link to canonical issue
 
+Orchestrator duties in Linear:
+- add evidence comment at key transitions (PR, SHA, validation summary)
+- keep state synchronized with actual code status
+- ensure final state change to `Done` is performed after closeout gate passes
+
+## 10. Branch Contamination Protocol
+
+If two tasks are mixed in one branch/PR:
+1. create dedicated branch from `origin/master` for misplaced task
+2. cherry-pick misplaced commit to dedicated branch
+3. reset original branch to task-pure commit
+4. revalidate both tasks and refresh evidence in Linear
+
+## 11. Audit Log Requirements
+
+Record at minimum:
 - parse result
 - pane target
 - `task_id`, `message_id`, `attempt`
-- dedupe/lock actions
-- retries and timers
+- dedupe/lock operations
+- retry/timer events
 - state transitions
-- evidence links (PR/CI/Linear comment IDs)
-- member run session identifiers (when visible dispatch starts)
-- ACK receipt timestamps per `task_id`
+- evidence links (PR/CI/Linear IDs)
+- visible run session IDs
+- ACK timestamps
 
-## L. Design Verification (Pencil MCP)
+## 12. UI Design Verification (Pencil MCP)
 
-- Design can be inspected via Pencil MCP during implementation/review.
-- Primary design file: `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
-- When UI tasks are dispatched, include this reference in the task contract.
+For UI-related tasks:
+- design can be inspected via Pencil MCP
+- primary design file: `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
+- include this path in dispatch and review checklist
