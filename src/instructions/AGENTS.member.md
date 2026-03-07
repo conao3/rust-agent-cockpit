@@ -35,6 +35,7 @@ Send ACK before any long-running command so leader can timestamp SLA compliance 
 - avoid unnecessary wide scans
 - do not include `src/instructions/*` in implementation PR unless explicitly requested
 - do not commit runtime artifacts (e.g. `src-tauri/logs/`) unless requested
+- if leader reports known main-tree dirty files, avoid touching them unless explicitly assigned
 
 ## D. Branch Hygiene
 

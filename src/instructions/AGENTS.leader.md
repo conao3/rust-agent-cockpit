@@ -123,4 +123,5 @@ Before starting next batch:
 - recompose all three AGENTS docs coherently (not append-only)
 - remove duplicate/conflicting statements
 - commit doc update
+- run preflight `git status --short` and explicitly decide handling for dirty files before dispatch
 - start next batch with explicit mapping

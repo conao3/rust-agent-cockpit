@@ -135,6 +135,7 @@ Every batch follows:
 3. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
 4. enforce full contract (scope/validation/SLO/evidence)
 5. recompose AGENTS docs as one coherent set before next batch
+6. run preflight repo check (`git status --short`) and classify dirty entries before dispatch (task-owned / operator-owned / unknown)
 
 In mixed-progress batches:
 

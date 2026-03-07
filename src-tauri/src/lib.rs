@@ -1066,6 +1066,28 @@ fn claude_log_file_path(cockpit_root: &Path, task_id: &str) -> PathBuf {
         .join("claude-hooks.jsonl")
 }
 
+fn resolve_cockpit_root_from_cwd(cwd: &Path) -> PathBuf {
+    if let Ok(root) = std::env::var("COCKPIT_ROOT") {
+        let root = root.trim();
+        if !root.is_empty() {
+            return PathBuf::from(root);
+        }
+    }
+
+    if cwd
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name == "src-tauri")
+        .unwrap_or(false)
+    {
+        if let Some(parent) = cwd.parent() {
+            return parent.to_path_buf();
+        }
+    }
+
+    cwd.to_path_buf()
+}
+
 fn claude_hook_script_body() -> String {
     format!(
         r#"#!/bin/sh
@@ -1334,13 +1356,14 @@ fn is_valid_registered_transition(
 #[cfg(not(test))]
 fn log_monitoring_event(value: serde_json::Value) {
     eprintln!("[monitoring] {}", value);
-    let path = Path::new("logs/monitoring/lifecycle.jsonl");
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let path = resolve_cockpit_root_from_cwd(&cwd).join("logs/monitoring/lifecycle.jsonl");
     if let Some(parent) = path.parent() {
         if create_dir_all(parent).is_err() {
             return;
         }
     }
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(file, "{value}");
     }
 }
@@ -1351,13 +1374,14 @@ fn log_monitoring_event(_value: serde_json::Value) {}
 #[cfg(not(test))]
 fn log_monitoring_runner_event(value: serde_json::Value) {
     eprintln!("[monitoring-runner] {}", value);
-    let path = Path::new("logs/monitoring/runner.jsonl");
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let path = resolve_cockpit_root_from_cwd(&cwd).join("logs/monitoring/runner.jsonl");
     if let Some(parent) = path.parent() {
         if create_dir_all(parent).is_err() {
             return;
         }
     }
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(file, "{value}");
     }
 }
@@ -1368,13 +1392,14 @@ fn log_monitoring_runner_event(_value: serde_json::Value) {}
 #[cfg(not(test))]
 fn log_linear_message_event(value: serde_json::Value) {
     eprintln!("[linear-messaging] {}", value);
-    let path = Path::new("logs/monitoring/linear-messaging.jsonl");
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let path = resolve_cockpit_root_from_cwd(&cwd).join("logs/monitoring/linear-messaging.jsonl");
     if let Some(parent) = path.parent() {
         if create_dir_all(parent).is_err() {
             return;
         }
     }
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(file, "{value}");
     }
 }
@@ -1633,13 +1658,24 @@ fn retry_delay_ms(attempt: u32) -> u64 {
 fn monitoring_input_dir(cwd: &Path) -> PathBuf {
     std::env::var("COCKPIT_MONITORING_INPUT_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| cwd.join("logs/codex"))
+        .unwrap_or_else(|_| resolve_cockpit_root_from_cwd(cwd).join("logs/codex"))
 }
 
 fn monitoring_offsets_file(cwd: &Path) -> PathBuf {
     std::env::var("COCKPIT_MONITORING_OFFSETS_PATH")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| cwd.join("logs/monitoring/runner-offsets.json"))
+        .unwrap_or_else(|_| {
+            resolve_cockpit_root_from_cwd(cwd).join("logs/monitoring/runner-offsets.json")
+        })
+}
+
+fn monitoring_ignore_logs_dir() -> bool {
+    std::env::var("COCKPIT_MONITORING_IGNORE_LOGS_DIR")
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            v == "1" || v == "true" || v == "yes" || v == "on"
+        })
+        .unwrap_or(true)
 }
 
 impl PtyManager {
@@ -1738,6 +1774,16 @@ impl MonitoringManager {
     }
 
     fn run_runner_loop(&self, app: AppHandle) {
+        if monitoring_ignore_logs_dir() {
+            log_monitoring_runner_event(serde_json::json!({
+                "event": "runner_disabled",
+                "reason": "COCKPIT_MONITORING_IGNORE_LOGS_DIR=true",
+            }));
+            loop {
+                thread::sleep(Duration::from_millis(1000));
+            }
+        }
+
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let input_dir = monitoring_input_dir(&cwd);
         let offsets_path = monitoring_offsets_file(&cwd);
@@ -1798,9 +1844,22 @@ impl MonitoringManager {
         let mut processed_events = 0_usize;
         for file in files {
             let key = file.to_string_lossy().to_string();
-            let mut previous_offset = *cursor.offsets.get(&key).unwrap_or(&0);
             let metadata = fs::metadata(&file)
                 .map_err(|e| format!("metadata failed for {}: {e}", file.display()))?;
+
+            // Ignore pre-existing file contents on first sight to avoid replaying large historical logs.
+            if !cursor.offsets.contains_key(&key) {
+                cursor.pending.remove(&key);
+                cursor.offsets.insert(key.clone(), metadata.len());
+                log_monitoring_runner_event(serde_json::json!({
+                    "event": "runner_file_seeded",
+                    "file": key,
+                    "offset": metadata.len(),
+                }));
+                continue;
+            }
+
+            let mut previous_offset = *cursor.offsets.get(&key).unwrap_or(&0);
             if previous_offset > metadata.len() {
                 previous_offset = 0;
                 cursor.pending.remove(&key);
