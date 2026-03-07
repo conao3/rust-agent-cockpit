@@ -62,7 +62,8 @@ export function MvpRoute() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
-                to="/settings"
+                to="/agent-cockpit/$cockpit_id/settings"
+                params={{ cockpit_id: "default" }}
                 className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 transition hover:border-cyan-300 hover:text-cyan-100"
               >
                 open settings
