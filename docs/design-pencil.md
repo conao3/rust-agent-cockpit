@@ -7,6 +7,31 @@ References:
 - React Aria Components: https://react-aria.adobe.com/getting-started
 - Adobe Spectrum: https://spectrum.adobe.com/
 - Tailwind CSS (Vite): https://tailwindcss.com/docs/installation/using-vite
+- Spectrum Icons (Workflow): `@spectrum-icons/workflow`
+- Spectrum Icons (UI): `@spectrum-icons/ui`
+
+## Icon Usage Guide
+
+Use `@spectrum-icons/workflow` for primary actions and navigation, `@spectrum-icons/ui` for compact UI controls.
+
+| Location | Icon | Package | Notes |
+|---|---|---|---|
+| Header — settings button | `Settings` | workflow | right side of all screen headers |
+| Window title bar — close | `CrossSmall` | ui | replaces colored dot close button |
+| Agent node — connect handle | `ArrowRight` | workflow | drag handle to create connections |
+| Add connection / add agent | `Add` | workflow | "+" action buttons |
+| Edit connection/item | `Edit` | workflow | inline edit in lists/tables |
+| Delete connection/item | `Delete` | workflow | inline delete in lists/tables |
+| Search field | `Magnify` | workflow | search inputs |
+| Filter control | `Filter` | workflow | filter toolbar buttons |
+| Dropdown indicator | `ChevronDown` | ui | select/dropdown fields |
+| Task status — done | `Checkmark` | ui | done state indicator |
+| Task status — failed | `AlertCircle` | workflow | failed/error state |
+| Task status — in_progress | `Refresh` | workflow | spinning when active |
+| Worktree — open | `OpenIn` | workflow | open worktree action |
+| Worktree — delete | `Delete` | workflow | delete worktree action |
+| Linear inbox — delivered | `CheckmarkCircle` | workflow | delivered status |
+| Linear inbox — unroutable | `AlertCircle` | workflow | unroutable status |
 
 ## 1. Product Intent
 
@@ -24,9 +49,22 @@ Core goals:
 
 - Current implementation is a **single route page** (no React Router flow yet)
 - Navigation is mostly **in-canvas window/panel interaction**, not full page transitions
+- All cockpit-specific screens are nested under `/agent-cockpit/:cockpit_id`
 - Separate the design file into:
 1. Implemented screens (current reality)
 2. Planned screens (next-phase UI)
+
+## Route Map
+
+| Route | Screen | Notes |
+|---|---|---|
+| `/` | SCR-050 Cockpit List | list/create cockpit instances |
+| `/agent-cockpit/:cockpit_id` | SCR-100 Cockpit Desktop | main canvas |
+| `/agent-cockpit/:cockpit_id?pty=:task_id&agent=:agent_id&cwd=:cwd` | SCR-120 PTY Terminal | query-driven PTY window |
+| `/agent-cockpit/:cockpit_id/tasks` | SCR-130 Task Lifecycle Monitor | |
+| `/agent-cockpit/:cockpit_id/inbox` | SCR-140 Linear Inbox | |
+| `/agent-cockpit/:cockpit_id/settings` | SCR-150 Agent Settings | |
+| `/agent-cockpit/:cockpit_id/worktrees` | SCR-160 Worktree Manager | |
 
 ## 3. Primary Users
 
@@ -45,6 +83,20 @@ Core goals:
 7. Message Routing / Linear Inbox (planned)
 
 ## 5. Screen Metadata
+
+### SCR-050: Cockpit List
+
+- Status: Planned
+- Route: `/`
+- Purpose: manage and select agent cockpit instances
+- Main content:
+1. list of saved cockpits (name, id, agent count, status, last_used)
+2. create new cockpit action
+3. open / duplicate / delete per-cockpit actions
+- Expected commands:
+1. `cockpit_list`
+2. `cockpit_create`
+3. `cockpit_delete`
 
 ### SCR-000: Boot / App Start
 
