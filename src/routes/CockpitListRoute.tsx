@@ -74,7 +74,7 @@ export function CockpitListRoute() {
                 reload
               </Button>
               <Button type="button" onPress={() => createMutation.mutate()} isDisabled={pendingId !== null} className={buttonBaseClass}>
-                <Add size="S" />
+                <Add size="S" UNSAFE_className="text-white" />
                 {pendingId === "new" ? "creating..." : "new cockpit"}
               </Button>
             </div>
@@ -85,7 +85,7 @@ export function CockpitListRoute() {
               aria-label="search cockpits"
               className="flex w-full max-w-sm items-center gap-2 rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
             >
-              <Magnify size="S" />
+              <Magnify size="S" UNSAFE_className="text-white" />
               <Label className="sr-only">search</Label>
               <Input
                 value={query}
@@ -143,7 +143,7 @@ export function CockpitListRoute() {
                           }
                           className={buttonBaseClass}
                         >
-                          <OpenIn size="S" />
+                          <OpenIn size="S" UNSAFE_className="text-white" />
                           open
                         </Button>
                         <Button
@@ -152,7 +152,7 @@ export function CockpitListRoute() {
                           isDisabled={pendingId === row.id || pendingId === "new"}
                           className={buttonBaseClass}
                         >
-                          <Delete size="S" />
+                          <Delete size="S" UNSAFE_className="text-white" />
                           {pendingId === row.id ? "deleting..." : "delete"}
                         </Button>
                       </div>
