@@ -176,6 +176,15 @@ enum LifecycleDecision {
     Stale,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum HookLifecycleEventKind {
+    InputWait,
+    ToolRunning,
+    Completed,
+    Error,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LifecycleIngestRequest {
@@ -216,6 +225,20 @@ struct LifecycleIngestResponse {
     current_state: TaskLifecycleState,
     event_key: String,
     updated_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HookLifecycleEvent {
+    task_id: String,
+    member: String,
+    hook_event: HookLifecycleEventKind,
+    current_state: TaskLifecycleState,
+    source: String,
+    event_key: String,
+    updated_at_ms: u64,
+    message_id: Option<String>,
+    raw_hook_event: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -285,6 +308,13 @@ struct MonitoringRunnerCursor {
 #[derive(Debug, Clone)]
 struct MonitoringRunnerEvent {
     request: LifecycleIngestRequest,
+    hook_event: Option<HookLifecycleEventEnvelope>,
+}
+
+#[derive(Debug, Clone)]
+struct HookLifecycleEventEnvelope {
+    kind: HookLifecycleEventKind,
+    raw_hook_event: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1644,6 +1674,33 @@ fn extract_member(value: &serde_json::Value) -> String {
         .unwrap_or_else(monitoring_member_fallback)
 }
 
+fn normalize_hook_lifecycle_event_kind(value: &str) -> Option<HookLifecycleEventKind> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "stop" | "human_turn" | "human-turn" | "waiting" | "input_wait" | "input-wait" => {
+            Some(HookLifecycleEventKind::InputWait)
+        }
+        "pretooluse" | "posttooluse" | "tool_running" | "tool-running" | "running"
+        | "executing" => Some(HookLifecycleEventKind::ToolRunning),
+        "taskcompleted" | "done" | "completed" | "complete" | "finished" | "success"
+        | "succeeded" => Some(HookLifecycleEventKind::Completed),
+        "posttoolusefailure" | "failed" | "error" => Some(HookLifecycleEventKind::Error),
+        _ => None,
+    }
+}
+
+fn extract_hook_lifecycle_event(payload: &serde_json::Value) -> Option<HookLifecycleEventEnvelope> {
+    for key in ["hook_event_name", "hookEventName", "hook_event", "hookEvent"] {
+        if let Some(raw) = payload.get(key).and_then(|value| value.as_str()) {
+            let kind = normalize_hook_lifecycle_event_kind(raw)?;
+            return Some(HookLifecycleEventEnvelope {
+                kind,
+                raw_hook_event: Some(raw.trim().to_string()),
+            });
+        }
+    }
+    None
+}
+
 fn extract_state(value: &serde_json::Value) -> Option<TaskLifecycleState> {
     if let Some(raw) = json_string(value, &["hook_event_name", "hookEventName"]) {
         if let Some(state) = normalize_lifecycle_state(&raw) {
@@ -1699,6 +1756,7 @@ fn build_runner_event(
                                         dedupe_key,
                                         source: Some("backend_runner".to_string()),
                                     },
+                                    hook_event: None,
                                 }));
                             }
                         }
@@ -1736,6 +1794,11 @@ fn build_runner_event(
     let source = json_string(&payload, &["source"]).unwrap_or_else(|| "backend_runner".to_string());
     let message_id = json_string(&payload, &["id", "event_id", "message_id", "messageId"]);
     let dedupe_key = Some(format!("{}:{offset}", path.to_string_lossy()));
+    let hook_event = if source == COCKPIT_HOOK_SOURCE {
+        extract_hook_lifecycle_event(&payload)
+    } else {
+        None
+    };
 
     Ok(Some(MonitoringRunnerEvent {
         request: LifecycleIngestRequest {
@@ -1746,6 +1809,7 @@ fn build_runner_event(
             dedupe_key,
             source: Some(source),
         },
+        hook_event,
     }))
 }
 
@@ -2035,6 +2099,13 @@ impl MonitoringManager {
                 let line_offset = previous_offset + idx as u64;
                 if let Some(event) = build_runner_event(&file, line_offset, line)? {
                     let now = now_millis();
+                    let source = event
+                        .request
+                        .source
+                        .clone()
+                        .unwrap_or_else(|| "backend".to_string());
+                    let message_id = event.request.message_id.clone();
+                    let hook_event = event.hook_event.clone();
                     let response = {
                         let mut state = self
                             .state
@@ -2043,6 +2114,20 @@ impl MonitoringManager {
                         state.ingest(event.request, now)
                     };
                     let _ = app.emit("monitoring-lifecycle", &response);
+                    if let Some(hook_event) = hook_event {
+                        let payload = HookLifecycleEvent {
+                            task_id: response.task_id.clone(),
+                            member: response.member.clone(),
+                            hook_event: hook_event.kind,
+                            current_state: response.current_state,
+                            source: source.clone(),
+                            event_key: response.event_key.clone(),
+                            updated_at_ms: response.updated_at_ms,
+                            message_id: message_id.clone(),
+                            raw_hook_event: hook_event.raw_hook_event,
+                        };
+                        let _ = app.emit("monitoring-hook", &payload);
+                    }
                     processed_events = processed_events.saturating_add(1);
                 }
                 start = idx + 1;
@@ -3391,31 +3476,54 @@ mod tests {
         let path = Path::new("/tmp/logs/codex/CON-76/20260307-000001.jsonl");
         let cases = [
             (
-                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"Stop","id":"evt-human"}"#,
+                r#"{"task_id":"CON-76","member":"MemberA","source":"claude_hook","hook_event_name":"Stop","id":"evt-human"}"#,
                 TaskLifecycleState::Ack,
+                HookLifecycleEventKind::InputWait,
             ),
             (
-                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"PreToolUse","id":"evt-tool"}"#,
+                r#"{"task_id":"CON-76","member":"MemberA","source":"claude_hook","hook_event_name":"PreToolUse","id":"evt-tool"}"#,
                 TaskLifecycleState::InProgress,
+                HookLifecycleEventKind::ToolRunning,
             ),
             (
-                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"TaskCompleted","id":"evt-done"}"#,
+                r#"{"task_id":"CON-76","member":"MemberA","source":"claude_hook","hook_event_name":"TaskCompleted","id":"evt-done"}"#,
                 TaskLifecycleState::Done,
+                HookLifecycleEventKind::Completed,
             ),
             (
-                r#"{"task_id":"CON-76","member":"MemberA","hook_event_name":"PostToolUseFailure","id":"evt-fail"}"#,
+                r#"{"task_id":"CON-76","member":"MemberA","source":"claude_hook","hook_event_name":"PostToolUseFailure","id":"evt-fail"}"#,
                 TaskLifecycleState::Failed,
+                HookLifecycleEventKind::Error,
             ),
         ];
 
-        for (line, expected) in cases {
+        for (line, expected, expected_hook) in cases {
             let event = build_runner_event(path, 18, line)
                 .expect("parse should succeed")
                 .expect("event should be produced");
             assert_eq!(event.request.task_id, "CON-76");
             assert_eq!(event.request.member, "MemberA");
             assert_eq!(event.request.state, expected);
+            assert_eq!(event.hook_event.as_ref().map(|value| value.kind), Some(expected_hook));
+            assert!(
+                event
+                    .hook_event
+                    .as_ref()
+                    .and_then(|value| value.raw_hook_event.as_deref())
+                    .is_some()
+            );
         }
+    }
+
+    #[test]
+    fn runner_event_does_not_emit_hook_metadata_for_non_hook_source() {
+        let path = Path::new("/tmp/logs/codex/CON-76/20260307-000001.jsonl");
+        let line = r#"{"task_id":"CON-76","member":"MemberA","source":"backend_runner","hook_event_name":"PreToolUse","id":"evt-tool"}"#;
+        let event = build_runner_event(path, 18, line)
+            .expect("parse should succeed")
+            .expect("event should be produced");
+        assert_eq!(event.request.state, TaskLifecycleState::InProgress);
+        assert!(event.hook_event.is_none());
     }
 
     fn run_cmd(cwd: &Path, cmd: &str, args: &[&str]) {
