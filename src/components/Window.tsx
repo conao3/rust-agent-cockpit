@@ -32,6 +32,12 @@ type ResizeState =
     }
   | null;
 
+const statusClassNames: Record<string, string> = {
+  connecting: "bg-blue-950 text-blue-200",
+  connected: "bg-emerald-950 text-emerald-200",
+  error: "bg-red-950 text-red-200",
+};
+
 export function Window({
   x,
   y,
@@ -105,8 +111,8 @@ export function Window({
 
   return (
     <section
-      className="window"
       aria-label={title}
+      className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-950/90 shadow-[0_16px_40px_rgba(1,4,9,0.66)]"
       style={{
         left: x,
         top: y,
@@ -116,15 +122,21 @@ export function Window({
       }}
       onMouseDown={() => onActivate?.()}
     >
-      <header className="window-header" onMouseDown={handleDragStart}>
-        <h1 className="window-title">{title}</h1>
+      <header
+        className="flex cursor-grab select-none items-center justify-between border-b border-slate-700 px-3 py-2 active:cursor-grabbing"
+        onMouseDown={handleDragStart}
+      >
+        <h1 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-slate-100">{title}</h1>
         {status ? (
-          <span className={`status status-${status}`} aria-live="polite">
+          <span
+            aria-live="polite"
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${statusClassNames[status] ?? "bg-slate-800 text-slate-200"}`}
+          >
             {status}
           </span>
         ) : null}
       </header>
-      <div className="window-content">{children}</div>
+      <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       <button
         aria-label={`${title} resize`}
         className="window-resize-handle"
