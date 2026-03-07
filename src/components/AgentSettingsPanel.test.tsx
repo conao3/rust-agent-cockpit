@@ -44,7 +44,7 @@ describe("AgentSettingsPanel", () => {
       ],
     });
 
-    render(<AgentSettingsPanel />);
+    render(<AgentSettingsPanel cockpitId="default" />);
 
     await screen.findByDisplayValue("leader");
 
@@ -62,6 +62,7 @@ describe("AgentSettingsPanel", () => {
 
     await waitFor(() => {
       expect(saveMock).toHaveBeenCalledWith({
+        cockpitId: "default",
         settings: {
           version: 1,
           agents: [
@@ -77,6 +78,7 @@ describe("AgentSettingsPanel", () => {
       });
     });
 
+    expect(getMock).toHaveBeenCalledWith({ cockpitId: "default" });
     expect(await screen.findByText("settings saved")).toBeTruthy();
   });
 
@@ -95,7 +97,7 @@ describe("AgentSettingsPanel", () => {
       ],
     });
 
-    render(<AgentSettingsPanel />);
+    render(<AgentSettingsPanel cockpitId="default" />);
 
     await screen.findByText("agents: 0");
     fireEvent.click(screen.getByRole("button", { name: "add agent" }));
@@ -117,7 +119,7 @@ describe("AgentSettingsPanel", () => {
   it("shows backend error on load failure", async () => {
     getMock.mockRejectedValueOnce(new Error("load failed"));
 
-    render(<AgentSettingsPanel />);
+    render(<AgentSettingsPanel cockpitId="default" />);
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("load failed");

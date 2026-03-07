@@ -13,7 +13,12 @@ export type AgentSettingsDocument = {
   agents: AgentSettings[];
 };
 
+export type AgentSettingsGetRequest = {
+  cockpitId: string;
+};
+
 export type AgentSettingsSaveRequest = {
+  cockpitId: string;
   settings: AgentSettingsDocument;
 };
 
@@ -80,8 +85,8 @@ function parseAgentSettingsDocument(payload: unknown): AgentSettingsDocument {
   };
 }
 
-export async function agentSettingsGet(): Promise<AgentSettingsDocument> {
-  const payload = await invoke<unknown>("agent_settings_get", { req: {} });
+export async function agentSettingsGet(req: AgentSettingsGetRequest): Promise<AgentSettingsDocument> {
+  const payload = await invoke<unknown>("agent_settings_get", { req });
   return parseAgentSettingsDocument(payload);
 }
 
