@@ -1,5 +1,6 @@
 import { Link, Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { HomeRoute } from "./routes/HomeRoute";
+import { LinearInboxRoute } from "./routes/LinearInboxRoute";
 import { MvpRoute } from "./routes/MvpRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { TaskLifecycleRoute } from "./routes/TaskLifecycleRoute";
@@ -42,6 +43,13 @@ function RootLayout() {
           >
             tasks
           </Link>
+          <Link
+            to="/linear-inbox"
+            className={navLinkClass}
+            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+          >
+            inbox
+          </Link>
         </nav>
       </header>
       <section className="min-h-0 flex-1">
@@ -79,7 +87,13 @@ const taskLifecycleRoute = createRoute({
   component: TaskLifecycleRoute,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, cockpitRoute, settingsRoute, taskLifecycleRoute]);
+const linearInboxRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/linear-inbox",
+  component: LinearInboxRoute,
+});
+
+const routeTree = rootRoute.addChildren([homeRoute, cockpitRoute, settingsRoute, taskLifecycleRoute, linearInboxRoute]);
 
 export const router = createRouter({
   routeTree,
