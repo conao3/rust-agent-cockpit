@@ -137,6 +137,11 @@ Every batch follows:
 5. recompose AGENTS docs as one coherent set before next batch
 6. run preflight repo check (`git status --short`) and classify dirty entries before dispatch (task-owned / operator-owned / unknown)
 
+Preflight handling rule:
+
+- known operator/runtime untracked entries (for example `docs/design-pencil.pen`, `src-tauri/logs/`) are classified as non-blocking and must not stop the batch
+- stop and escalate only for unknown or task-conflicting dirty entries
+
 In mixed-progress batches:
 
 - if one issue reaches `in_review` earlier, switch that issue to immediate closeout flow without blocking the sibling issue run

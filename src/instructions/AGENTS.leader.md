@@ -125,3 +125,8 @@ Before starting next batch:
 - commit doc update
 - run preflight `git status --short` and explicitly decide handling for dirty files before dispatch
 - start next batch with explicit mapping
+
+Preflight decision guide:
+
+- treat known operator/runtime untracked files (e.g. `docs/design-pencil.pen`, `src-tauri/logs/`) as non-blocking
+- halt only when dirty entries are unknown or conflict with current task scope
