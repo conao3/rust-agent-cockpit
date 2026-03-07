@@ -2,145 +2,139 @@
 
 Leader runbook for multi-agent execution (`memberA`, `memberB`).
 
-## A. Leader Mandate
+## 1. Responsibility
 
-- convert operator goals into bounded tasks
-- assign single owner per task
-- enforce contract, quality gates, and timing SLO
-- review/merge and complete closeout
-- keep operator heartbeat concise and frequent
+Leader must:
+- transform operator goals into bounded tasks
+- assign exactly one owner per task
+- enforce scope, SLO, validation, and evidence contracts
+- review PRs, merge safely, and complete closeout
+- keep concise heartbeat to operator/orchestrator
 
-## B. Mandatory Dispatch Contract
+## 2. Mandatory Delegation Contract
 
 Each delegation must include:
-
 - `task_id`
-- scope and explicit non-scope
+- scope and non-scope
 - target files/areas
 - required validation commands
-- expected handoff state (`in_review` or `done`)
-- blocker escalation instruction
-- SLO (`ACK<=10m`, `heartbeat<=20m`, unless overridden)
-- evidence format (PR URL, SHA, validations, changed files)
+- expected handoff (`in_review` or `done`)
+- blocker escalation path
+- SLO (`ACK<=10m`, `heartbeat<=20m` unless overridden)
+- required evidence format
 
-## C. Batch Planning Order
+## 3. Batch Order
 
-1. closeout-first for existing `In Review`
-2. then active implementation
-3. if no active queue, choose two non-overlapping backlog issues
+1. closeout existing `In Review`
+2. supervise active runs
+3. if queue empty, choose two non-overlapping backlog issues
+4. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
 
-Always announce assignment mapping explicitly.
+Mixed-progress handling:
+- close out issue immediately when it reaches `in_review`
+- continue supervising sibling issue
+- after closeout, dispatch next pair when safe
 
-Mixed-progress rule:
-
-- if one assigned issue reaches `in_review` before the other, run closeout immediately for that issue while keeping the other issue in active execution monitoring
-- after closeout is finished, you may dispatch the next two non-overlapping issues in the same batch
-- in the next batch, prioritize monitoring/recovery of already spawned runs before selecting new issues
-
-## D. Worktree Rules
+## 4. Worktree and Branch Rules
 
 Provision per-task worktree:
-
 ```bash
 git worktree add ./.wt/<feature-name> -b <feature-name>
 ```
 
-Cleanup sequence after merge:
-
+Cleanup after merge:
 ```bash
 git worktree remove ./.wt/<feature-name>
 git branch -d <feature-name>
 ```
 
-## E. Runtime Monitoring
+No destructive sync commands.
+If already cleaned, record and continue.
 
-- require immediate ACK from each member
-- require heartbeat by SLO window
-- if timeout/stall: reinject in same member pane
-- never dual-assign one `task_id`
-- if supervision stalls, do not keep tailing your own run log as the main action; switch to direct member-pane recovery
-- record per-member visible run `session_id` and ACK timestamp for operator/audit traceability
+## 5. Runtime Supervision
 
-Visible run hygiene in `agent-cockpit-team`:
+Leader must:
+- require immediate ACK
+- require heartbeat within SLO
+- reinject on stall (same owner first)
+- avoid duplicate assignment for same `task_id`
+- recover via direct member-pane actions
 
+Visible run hygiene (`agent-cockpit-team`):
 - `Ctrl-C` before launch
-- one clean command
+- send command and `Enter` separately
 - confirm `task_id`, `log`, `thread.started`
 
-## F. Handoff Acceptance (`in_review`)
+## 6. Handoff Acceptance (`in_review`)
 
-Reject handoff unless all present:
-
+Reject handoff unless all are present:
 - PR URL
 - head SHA
-- validations + results
+- validation commands + results
 - changed-files summary
 
-If SHA changes after rewrite/rebase, require corrected evidence comment.
-If prior evidence SHA was incorrect, require superseding correction.
-If a member recovery run omits the final `@Leader ... in_review` line, create a Linear evidence checkpoint yourself (PR/SHA/validations/files) before merge/closeout.
+If SHA changed, require superseding corrected evidence.
+If final `@Leader ... in_review` line is missing, post explicit evidence checkpoint before merge.
 
-## G. PR Review Gate
+## 7. PR Review and Merge Gate
 
-Before merge, verify:
-
+Before merge verify:
 - scope/non-scope compliance
-- no unrelated files/commits (especially `src/instructions/*` unless explicitly requested)
+- no unrelated files/commits
 - required CI checks green
-- mergeability after base updates/conflict resolution
-- branch purity per task in parallel runs (no mixed task commits across PRs)
+- mergeability after base update
+- branch purity per task
 
-If self-approval is blocked, record manual review evidence and proceed with merge checks.
+If self-approval is unavailable, record manual review evidence and proceed with merge checks.
 
-If parallel branches are contaminated:
+Branch contamination handling:
+1. split into task-dedicated branches from `origin/master`
+2. restore task-pure history
+3. rerun validations and evidence checks
 
-1. split commits into task-dedicated branches from `origin/master`
-2. restore original branch to task-pure history
-3. re-validate changed-files summaries for both PRs before keeping `In Review`
+## 8. Closeout Gate (`done`)
 
-## H. Closeout Gate (`done`)
-
-Done only when all pass:
-
+Mark done only when:
 1. PR merged
-2. Linear updated to `Done`/`Duplicate`
+2. Linear moved to `Done` or `Duplicate` with link
 3. worktree removed
-4. branch cleanup completed
+4. branch cleaned up
 5. local `master` synced non-destructively
 
-No destructive git sync commands.
-If worktree/branch is already absent (for example removed by merge automation), record it as already-clean instead of treating it as failure.
+## 9. Blocker Protocol
 
-## I. Blocker Protocol
+When blocked:
+- keep issue `In Review` (or `In Progress` as appropriate)
+- post blocker heartbeat (`reason`, `next action`)
+- delegate focused remediation
+- require fresh green checks before merge
 
-When required checks fail:
+Known recurrent case:
+- CI setup ordering causes missing `pnpm`
 
-- keep issue `In Review`
-- post blocker heartbeat (cause + next action)
-- delegate focused fix to owner
-- require fresh evidence and green checks before merge
+## 10. End-of-Batch Duty
 
-Known case:
+Before next batch:
+- recompose all AGENTS docs coherently (not append-only)
+- remove duplicate/conflicting rules
+- commit and push docs update
+- run preflight `git status --short`
+- classify dirty entries; block only unknown/conflicting
+- then kickoff next batch mapping
 
-- missing `pnpm` in CI workflow due setup ordering
+Known non-blocking artifacts:
+- `src-tauri/logs/`
+- `docs/design-pencil.pen`
 
-## J. End-of-Batch Duty
+## 11. Linear Management
 
-Before starting next batch:
+Leader must keep Linear state and evidence synchronized:
+- transition states with actual progress
+- add evidence comments (PR/SHA/validation)
+- perform final `Done` transition after closeout gate
 
-- recompose all three AGENTS docs coherently (not append-only)
-- remove duplicate/conflicting statements
-- commit doc update
-- run preflight `git status --short` and explicitly decide handling for dirty files before dispatch
-- start next batch with explicit mapping
+## 12. UI Design Verification (Pencil MCP)
 
-## K. Design Verification (Pencil MCP)
-
-- UI tasks should reference Pencil MCP for design checks.
-- Primary design file: `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
-- Include this file path in UI dispatch contracts and review checklists.
-
-Preflight decision guide:
-
-- treat known operator/runtime untracked files (e.g. `docs/design-pencil.pen`, `src-tauri/logs/`) as non-blocking
-- halt only when dirty entries are unknown or conflict with current task scope
+For UI tasks, include Pencil MCP check in implementation and review.
+Design source:
+- `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`

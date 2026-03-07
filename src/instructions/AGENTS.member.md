@@ -1,106 +1,105 @@
 # AGENTS.member.md
 
-Member execution runbook for delegated tasks.
+Member runbook for delegated execution.
 
-## A. Core Responsibility
+## 1. Responsibility
 
+Member must:
 - implement only delegated scope
 - work only in assigned worktree/branch
-- send timely, structured updates to Leader
-- do not merge PRs
+- send structured lifecycle messages to Leader
+- never merge PRs
 
-## B. Message Format
+## 2. Message Contract
 
-All outbound messages use:
-
+All messages to Leader must use:
 ```text
 @Leader: <message>
 ```
 
 Required lifecycle messages:
-
 - start ACK: `@Leader: ACK <task-id> start`
 - periodic heartbeat within SLO
-- blocker report (`reason`, `last_step`)
-- final handoff with evidence
+- blocker: include `reason` and `last_step`
+- final handoff: explicit `in_review` or `done`
 
-If run is reinjected/restarted, ACK again with same `task_id`.
-If recovery is reinjected from a stalled leader run, send ACK first, then immediately include current step so leader can rebuild supervision state.
-Before exit, always emit the final `@Leader ... in_review|done` line explicitly, even if PR creation/validation already succeeded.
-Send ACK before any long-running command so leader can timestamp SLA compliance reliably.
+Reinjection/recovery rules:
+- if reinjected, ACK again with same `task_id`
+- if leader run was stalled, ACK then send current step immediately
+- send ACK before long-running command
+- emit final `@Leader ... in_review|done` line before exit
 
-## C. Scope and Repo Hygiene
+## 3. Scope and Repo Hygiene
 
-- keep edits within assigned files/areas
-- avoid unnecessary wide scans
-- do not include `src/instructions/*` in implementation PR unless explicitly requested
-- do not commit runtime artifacts (e.g. `src-tauri/logs/`) unless requested
-- if leader reports known main-tree dirty files, avoid touching them unless explicitly assigned
-- ignore known operator/design artifacts (e.g. `docs/design-pencil.pen`) unless explicitly assigned
+- edit only assigned files/areas
+- avoid broad repo scans unrelated to task
+- do not modify `src/instructions/*` unless explicitly assigned
+- do not commit runtime artifacts (e.g. `src-tauri/logs/`) unless assigned
+- avoid touching known operator-owned dirty files unless assigned
+- ignore `docs/design-pencil.pen` unless assigned
 
-## D. Branch Hygiene
+## 4. Branch Hygiene
 
 Before handoff:
-
-- ensure task-pure commits
-- apply Leader-requested rebase/update
+- keep commits task-pure
+- apply requested rebase/update
 - report updated SHA after rewrite/rebase
-- include short conflict note if conflict resolved
-- if leader reports branch contamination with another task, assist split/rebase immediately and resend task-pure evidence
+- include conflict resolution note when relevant
+- if contamination is found, assist split/rebase and resend clean evidence
 
-## E. Evidence Contract (`in_review`)
+## 5. Evidence Contract (`in_review`)
 
 Handoff must include:
-
 - `task_id`
 - PR URL
 - head SHA
-- validation commands and results
+- validations and results
 - changed-files summary
-- risks note (`none` if not applicable)
+- risk note (`none` if none)
 
 Template:
-
 ```text
 @Leader: <task-id> in_review. commit=<sha> pr=<url> validation='<cmds: ok>' files='<summary>' risks='<none|...>'
 ```
 
 Blocked template:
-
 ```text
 @Leader: <task-id> blocked. reason=<short-reason> last_step=<summary>
 ```
 
-## F. Timing SLO
+## 6. Timing SLO
 
 Default SLO unless overridden:
-
 - ACK <= 10m
 - heartbeat <= 20m
 
-If SLO breach risk appears, report immediately.
+If SLO risk appears, report immediately.
 If process exits unexpectedly, report `failed_needs_resume` with last completed step.
 
-## G. Validation Rules
+## 7. Validation Rules
 
 - run exact validations from dispatch contract
-- rerun required validations after base update/rebase/conflict fix
-- if CI pending/failing, report status and wait for Leader instruction
+- rerun required validations after rebase/base update/conflict fix
+- if CI is pending/failing, report status and wait for Leader instruction
 
-## H. After `in_review`
+## 8. Behavior After `in_review`
 
-After `in_review` handoff, stop feature edits unless Leader asks for follow-up.
-If any evidence was wrong (e.g. SHA typo), send superseding corrected handoff immediately.
-If your sibling issue is still in progress, do not resume unrelated edits after handoff; wait for explicit Leader instruction.
-If Leader keeps the same batch open and immediately starts the next assignment set, treat it as a new run only after explicit new `task_id` ACK.
-Do not perform final cleanup assumptions in member reports; report current branch/worktree state and let Leader decide closeout actions.
+- stop feature edits unless Leader requests follow-up
+- if evidence is wrong (e.g. SHA typo), send corrected superseding message immediately
+- if sibling issue is still active, do not start unrelated edits
+- treat next assignment as new run only after explicit new `task_id`
+- report current branch/worktree state; Leader handles closeout
 
-## I. End-of-Batch Input
+## 9. End-of-Batch Input
 
-Include concise lessons learned so Leader can recompose AGENTS docs cleanly each batch.
+Send concise lessons learned so Leader can recompose AGENTS docs next batch.
 
-## J. Design Verification (Pencil MCP)
+## 10. Linear and Design Notes
 
-- For UI assignments, validate implementation against Pencil MCP design.
-- Primary design file: `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
-- Mention any intentional deviation from the design in the final handoff.
+Linear:
+- include task id/state context in updates so Leader can sync Linear correctly
+
+UI design verification:
+- verify UI tasks against Pencil MCP design source
+- `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
+- mention intentional deviations in final handoff
