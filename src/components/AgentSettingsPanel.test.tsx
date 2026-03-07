@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentSettingsPanel } from "./AgentSettingsPanel";
 import { agentSettingsGet, agentSettingsSave } from "../agentSettingsApi";
@@ -10,6 +12,11 @@ vi.mock("../agentSettingsApi", () => ({
 
 const getMock = vi.mocked(agentSettingsGet);
 const saveMock = vi.mocked(agentSettingsSave);
+
+function Wrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 
 afterEach(() => {
   cleanup();
@@ -44,7 +51,7 @@ describe("AgentSettingsPanel", () => {
       ],
     });
 
-    render(<AgentSettingsPanel cockpitId="default" />);
+    render(<AgentSettingsPanel cockpitId="default" />, { wrapper: Wrapper });
 
     await screen.findByDisplayValue("leader");
 
@@ -97,8 +104,9 @@ describe("AgentSettingsPanel", () => {
       ],
     });
 
-    render(<AgentSettingsPanel cockpitId="default" />);
+    render(<AgentSettingsPanel cockpitId="default" />, { wrapper: Wrapper });
 
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
     await screen.findByText("agents: 0");
     fireEvent.click(screen.getByRole("button", { name: "add agent" }));
 
@@ -119,7 +127,7 @@ describe("AgentSettingsPanel", () => {
   it("shows backend error on load failure", async () => {
     getMock.mockRejectedValueOnce(new Error("load failed"));
 
-    render(<AgentSettingsPanel cockpitId="default" />);
+    render(<AgentSettingsPanel cockpitId="default" />, { wrapper: Wrapper });
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("load failed");
