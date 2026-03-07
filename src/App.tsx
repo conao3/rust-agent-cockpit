@@ -9,7 +9,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { AgentNode, type AgentNodeData } from "./components/AgentNode";
 
-export const resolvePtyCreateContext = (search: string) => {
+export function resolvePtyCreateContext(search: string) {
   const params = new URLSearchParams(search);
   const firstNonEmpty = (...values: Array<string | null>): string | undefined => {
     for (const value of values) {
@@ -27,7 +27,7 @@ export const resolvePtyCreateContext = (search: string) => {
     taskId: firstNonEmpty(params.get("pty"), params.get("task_id"), params.get("taskId")),
     member: firstNonEmpty(params.get("agent"), params.get("member")),
   };
-};
+}
 
 const nodeTypes = {
   agent: AgentNode,

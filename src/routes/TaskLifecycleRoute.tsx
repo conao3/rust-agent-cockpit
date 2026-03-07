@@ -34,7 +34,7 @@ type TaskSla = {
   elapsedMs: number | null;
 };
 
-const formatElapsed = (elapsedMs: number | null): string => {
+function formatElapsed(elapsedMs: number | null): string {
   if (elapsedMs === null) {
     return "—";
   }
@@ -51,9 +51,9 @@ const formatElapsed = (elapsedMs: number | null): string => {
   }
   const hours = Math.floor(minutes / 60);
   return `${hours}h ago`;
-};
+}
 
-const toUiState = (task: TrackedTask): UiState => {
+function toUiState(task: TrackedTask): UiState {
   const event = task.lastEventId?.toLowerCase() ?? "";
   if (event.includes("in_review")) {
     return "in_review";
@@ -75,7 +75,7 @@ const toUiState = (task: TrackedTask): UiState => {
     default:
       return "queued";
   }
-};
+}
 
 const statusMeta: Record<UiState, { icon: string; textClass: string }> = {
   queued: { icon: "◌", textClass: "text-neutral-400" },
@@ -89,7 +89,7 @@ const statusMeta: Record<UiState, { icon: string; textClass: string }> = {
 
 const matrixOrder: UiState[] = ["queued", "sent", "acknowledged", "in_progress", "in_review", "done", "failed"];
 
-const toSla = (task: TrackedTask, now: number): TaskSla => {
+function toSla(task: TrackedTask, now: number): TaskSla {
   if (task.updatedAtMs === null) {
     return { status: "ok", elapsedMs: null };
   }
@@ -105,9 +105,9 @@ const toSla = (task: TrackedTask, now: number): TaskSla => {
     return { status: "warning", elapsedMs };
   }
   return { status: "ok", elapsedMs };
-};
+}
 
-const applySnapshot = (current: TrackedTask[], snapshot: TaskLifecycleSnapshot): TrackedTask[] => {
+function applySnapshot(current: TrackedTask[], snapshot: TaskLifecycleSnapshot): TrackedTask[] {
   const key = `${snapshot.taskId}:${snapshot.member}`;
   const nextRow: TrackedTask = {
     taskId: snapshot.taskId,
@@ -128,9 +128,9 @@ const applySnapshot = (current: TrackedTask[], snapshot: TaskLifecycleSnapshot):
     ...nextRow,
   };
   return copy;
-};
+}
 
-const updateFromIngest = (current: TrackedTask[], payload: ReturnType<typeof parseLifecycleIngestResponse>): TrackedTask[] => {
+function updateFromIngest(current: TrackedTask[], payload: ReturnType<typeof parseLifecycleIngestResponse>): TrackedTask[] {
   const key = `${payload.taskId}:${payload.member}`;
   const index = current.findIndex((entry) => `${entry.taskId}:${entry.member}` === key);
   if (index < 0) {
@@ -155,7 +155,7 @@ const updateFromIngest = (current: TrackedTask[], payload: ReturnType<typeof par
     lastEventId: payload.eventKey,
   };
   return copy;
-};
+}
 
 const initialTasks: TrackedTask[] = [
   { taskId: "CON-107", member: "MemberB", title: "Task Lifecycle Monitor", state: "in_progress", updatedAtMs: null, historyLen: 0, lastEventId: null },

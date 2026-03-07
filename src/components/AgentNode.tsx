@@ -16,12 +16,12 @@ type PtyOutputPayload =
       output?: string;
     };
 
-const normalizePtyId = (id: PtyId | null | undefined): string | null => {
+function normalizePtyId(id: PtyId | null | undefined): string | null {
   if (id === null || id === undefined) {
     return null;
   }
   return String(id);
-};
+}
 
 export type AgentNodeData = {
   label: string;
