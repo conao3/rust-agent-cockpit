@@ -125,6 +125,7 @@ Before next batch:
 - classify dirty entries; block only unknown/conflicting
 - then kickoff next batch mapping
 - in kickoff report, always include carry-over active runs (`task_id`, owner, latest ACK/heartbeat) and the new batch id
+- if previous batch process is still running, terminate it first and continue under the new batch id only
 
 Known non-blocking artifacts:
 - `src-tauri/logs/`

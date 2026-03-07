@@ -30,6 +30,7 @@ Reinjection/recovery rules:
 - emit final `@Leader ... in_review|done` line before exit
 - when continuing from prior batch carry-over, first heartbeat must include the previous step checkpoint and immediate next step
 - include the concrete `task_id` token in every heartbeat line so log-based recovery can match runs reliably
+- if Leader announces batch-id rollover, continue under the same `task_id` and re-emit ACK once at restart boundary
 
 ## 3. Scope and Repo Hygiene
 

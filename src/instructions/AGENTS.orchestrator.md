@@ -157,6 +157,7 @@ Preflight before dispatch:
 Active-run log discovery rule:
 - discover active member logs by listing recent files per `task_id` directory (`logs/codex/<task_id>/*.jsonl`) instead of global grep-only scans
 - if no log file is found, treat as recoverable telemetry miss and use pane-level ACK/heartbeat evidence directly
+- before starting a new batch id, stop any still-running previous leader batch to avoid duplicate supervision loops
 
 ## 9. Linear Task Management (Required)
 
