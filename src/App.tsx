@@ -50,8 +50,8 @@ const firstNonEmpty = (...values: Array<string | null>): string | undefined => {
 
 export const resolvePtyCreateContext = (search: string): PtyCreateContext => {
   const params = new URLSearchParams(search);
-  const taskId = firstNonEmpty(params.get("task_id"), params.get("taskId"));
-  const member = firstNonEmpty(params.get("member"), params.get("agent"));
+  const taskId = firstNonEmpty(params.get("pty"), params.get("task_id"), params.get("taskId"));
+  const member = firstNonEmpty(params.get("agent"), params.get("member"));
   const cwd = firstNonEmpty(params.get("cwd"));
   return {
     cwd,

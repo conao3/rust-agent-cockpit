@@ -1,3 +1,4 @@
+import { useParams } from "@tanstack/react-router";
 import { FormEvent, useState } from "react";
 import {
   LinearMessageIngestResponse,
@@ -25,6 +26,7 @@ const inputClass =
   "w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-300";
 
 export function LinearInboxRoute() {
+  const { cockpit_id: cockpitId } = useParams({ from: "/agent-cockpit/$cockpit_id/inbox" });
   const [form, setForm] = useState<FormState>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [response, setResponse] = useState<LinearMessageIngestResponse | null>(null);
@@ -55,7 +57,7 @@ export function LinearInboxRoute() {
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-6 p-6 text-slate-100">
       <header className="space-y-1">
         <h2 className="m-0 text-2xl font-bold tracking-[0.02em]">Linear Inbox</h2>
-        <p className="m-0 text-sm text-slate-400">CON-108 route for manual linear comment ingest checks.</p>
+        <p className="m-0 text-sm text-slate-400">Cockpit: {cockpitId}</p>
       </header>
 
       <form className="grid gap-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4" onSubmit={onSubmit}>

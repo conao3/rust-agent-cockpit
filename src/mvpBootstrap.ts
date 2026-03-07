@@ -12,10 +12,10 @@ export function buildCockpitSearch(values: BootstrapValues): string {
   const member = sanitize(values.member);
   const cwd = sanitize(values.cwd);
   if (taskId) {
-    params.set("task_id", taskId);
+    params.set("pty", taskId);
   }
   if (member) {
-    params.set("member", member);
+    params.set("agent", member);
   }
   if (cwd) {
     params.set("cwd", cwd);

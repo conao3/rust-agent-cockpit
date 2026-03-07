@@ -1,4 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   lifecycleStates,
@@ -161,6 +162,7 @@ const initialTasks: TrackedTask[] = [
 ];
 
 export function TaskLifecycleRoute() {
+  const { cockpit_id: cockpitId } = useParams({ from: "/agent-cockpit/$cockpit_id/tasks" });
   const [tasks, setTasks] = useState<TrackedTask[]>(initialTasks);
   const [taskIdInput, setTaskIdInput] = useState("CON-107");
   const [memberInput, setMemberInput] = useState("MemberB");
@@ -331,6 +333,7 @@ export function TaskLifecycleRoute() {
             </p>
           </div>
           <div className="text-right font-mono text-xs text-[#737373]">
+            <p className="m-0">cockpit: {cockpitId}</p>
             <p className="m-0">realtime: {lastRealtime ? formatElapsed(tick - lastRealtime) : "waiting"}</p>
             <p className="m-0">tracked: {tasks.length}</p>
           </div>
