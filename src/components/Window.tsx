@@ -139,7 +139,7 @@ export function Window({
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       <button
         aria-label={`${title} resize`}
-        className="window-resize-handle"
+        className="window-resize-handle absolute right-0 bottom-0 h-3.5 w-3.5 cursor-nwse-resize rounded-none border-none"
         type="button"
         onMouseDown={handleResizeStart}
       />
