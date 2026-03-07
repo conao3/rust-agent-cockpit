@@ -1,7 +1,4 @@
-import Add from "@spectrum-icons/workflow/Add";
-import Delete from "@spectrum-icons/workflow/Delete";
-import Magnify from "@spectrum-icons/workflow/Magnify";
-import OpenIn from "@spectrum-icons/workflow/OpenIn";
+import { ExternalLink, Plus, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -74,7 +71,7 @@ export function CockpitListRoute() {
                 reload
               </Button>
               <Button type="button" onPress={() => createMutation.mutate()} isDisabled={pendingId !== null} className={buttonBaseClass}>
-                <Add size="S" UNSAFE_className="text-white" />
+                <Plus size={14} />
                 {pendingId === "new" ? "creating..." : "new cockpit"}
               </Button>
             </div>
@@ -85,7 +82,7 @@ export function CockpitListRoute() {
               aria-label="search cockpits"
               className="flex w-full max-w-sm items-center gap-2 rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
             >
-              <Magnify size="S" UNSAFE_className="text-white" />
+              <Search size={14} />
               <Label className="sr-only">search</Label>
               <Input
                 value={query}
@@ -143,7 +140,7 @@ export function CockpitListRoute() {
                           }
                           className={buttonBaseClass}
                         >
-                          <OpenIn size="S" UNSAFE_className="text-white" />
+                          <ExternalLink size={14} />
                           open
                         </Button>
                         <Button
@@ -152,7 +149,7 @@ export function CockpitListRoute() {
                           isDisabled={pendingId === row.id || pendingId === "new"}
                           className={buttonBaseClass}
                         >
-                          <Delete size="S" UNSAFE_className="text-white" />
+                          <Trash2 size={14} />
                           {pendingId === row.id ? "deleting..." : "delete"}
                         </Button>
                       </div>
