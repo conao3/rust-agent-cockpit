@@ -41,6 +41,7 @@ Reinjection/recovery rules:
 ## 3. Scope and Repo Hygiene
 
 - edit only assigned files/areas
+- treat all unassigned work as non-scope and leave it untouched
 - avoid broad repo scans unrelated to task
 - do not modify `src/instructions/*` unless explicitly assigned
 - do not commit runtime artifacts (e.g. `src-tauri/logs/`) unless assigned
@@ -100,6 +101,7 @@ On recovery reinjection, repeat ACK as the very first line before any extra cont
 
 - stop feature edits unless Leader requests follow-up
 - if evidence is wrong (e.g. SHA typo), send corrected superseding message immediately
+- if the branch is merge-ready at `in_review`, prioritize immediate closeout support in the same supervision cycle (no deferred follow-up)
 - if sibling issue is still active, do not start unrelated edits
 - treat next assignment as new run only after explicit new `task_id`
 - report current branch/worktree state; Leader handles closeout
@@ -112,6 +114,7 @@ Send concise lessons learned so Leader can recompose AGENTS docs next batch.
 
 Linear:
 - include task id/state context in updates so Leader can sync Linear correctly
+- when handoff state changes (`in_review`/`done`), send update details immediately so Linear state stays synchronized
 
 UI design verification:
 - verify UI tasks against Pencil MCP design source

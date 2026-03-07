@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
+    "check:agents-contract": "node scripts/check-agents-contract-completeness.mjs",
     "check:invoke-contract": "node scripts/check-tauri-invoke-contract.mjs",
     "preview": "vite preview",
     "tauri": "tauri"

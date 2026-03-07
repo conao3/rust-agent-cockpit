@@ -152,8 +152,9 @@ For each batch:
 6. dispatch with full scope/non-scope/validation/evidence contract
 7. supervise ACK/heartbeat and recover on stall
 8. close out finished issue immediately even if sibling still running
-9. dispatch next pair when safe
-10. recompose AGENTS docs and push before next batch kickoff
+9. if `in_review` is merge-ready, execute immediate closeout in the same supervision cycle
+10. dispatch next pair when safe
+11. recompose AGENTS docs and push before next batch kickoff
 
 Batch kickoff handover requirement:
 - if prior batch leaves active runs, next batch must start with those run IDs and latest ACK/heartbeat snapshot before selecting any new issues
