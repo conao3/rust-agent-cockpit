@@ -10,8 +10,10 @@ Member must:
 - send structured lifecycle messages to Leader
 - never merge PRs
 - assume implementation ownership once assigned; Leader should remain review/closeout unless operator says otherwise
+- delegation-only contract: Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 
 Delegation integrity note:
+- Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 - if leader proposes to complete your assigned implementation directly without explicit operator authorization, raise a blocker line immediately
 
 ## 2. Message Contract
