@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
   agentSettingsGet,
@@ -50,34 +51,39 @@ type AgentSettingsPanelProps = {
 };
 
 export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
+  const queryClient = useQueryClient();
   const [settings, setSettings] = useState<AgentSettingsDocument>(emptyDocument);
   const [baseline, setBaseline] = useState<AgentSettingsDocument>(emptyDocument);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const dirty = useMemo(() => JSON.stringify(settings) !== JSON.stringify(baseline), [settings, baseline]);
-
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const loaded = await agentSettingsGet({ cockpitId });
-      const snapshot = cloneDocument(loaded);
-      setSettings(snapshot);
-      setBaseline(snapshot);
-    } catch (loadError) {
-      setError(String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: fetched, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["agentSettings", cockpitId] as const,
+    queryFn: () => agentSettingsGet({ cockpitId }),
+  });
 
   useEffect(() => {
-    void load();
-  }, []);
+    if (!fetched) {
+      return;
+    }
+    const snapshot = cloneDocument(fetched);
+    setSettings(snapshot);
+    setBaseline(snapshot);
+  }, [fetched]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => agentSettingsSave({ cockpitId, settings: normalizeSettings(settings) }),
+    onSuccess: (saved) => {
+      const snapshot = cloneDocument(saved);
+      setSettings(snapshot);
+      setBaseline(snapshot);
+      setNotice("settings saved");
+      queryClient.invalidateQueries({ queryKey: ["agentSettings", cockpitId] as const });
+    },
+  });
+
+  const error = queryError ? String(queryError) : saveMutation.error ? String(saveMutation.error) : null;
+  const saving = saveMutation.isPending;
+  const dirty = useMemo(() => JSON.stringify(settings) !== JSON.stringify(baseline), [settings, baseline]);
 
   const updateAgent = <K extends keyof AgentSettings>(index: number, key: K, value: AgentSettings[K]) => {
     setSettings((current) => ({
@@ -112,23 +118,6 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
     setNotice(null);
   };
 
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const saved = await agentSettingsSave({ cockpitId, settings: normalizeSettings(settings) });
-      const snapshot = cloneDocument(saved);
-      setSettings(snapshot);
-      setBaseline(snapshot);
-      setNotice("settings saved");
-    } catch (saveError) {
-      setError(String(saveError));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <section className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
@@ -140,7 +129,7 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["agentSettings", cockpitId] as const })}
               disabled={loading || saving}
               className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
             >
@@ -148,7 +137,7 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
             </button>
             <button
               type="button"
-              onClick={save}
+              onClick={() => saveMutation.mutate()}
               disabled={loading || saving || !dirty}
               className="rounded-md border border-cyan-400 bg-cyan-400 px-3 py-1.5 text-sm font-semibold text-slate-900 disabled:opacity-50"
             >

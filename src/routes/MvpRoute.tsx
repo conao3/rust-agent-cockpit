@@ -1,7 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { buildCockpitSearch } from "../mvpBootstrap";
-import { type WorktreeListItem, worktreeList } from "../worktreeApi";
+import { worktreeList } from "../worktreeApi";
 
 const members = ["Leader", "MemberA", "MemberB"] as const;
 
@@ -19,27 +20,13 @@ const defaultFormState: BootstrapFormState = {
 
 export function MvpRoute() {
   const [form, setForm] = useState<BootstrapFormState>(defaultFormState);
-  const [rows, setRows] = useState<WorktreeListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const listed = await worktreeList({ basedir: ".wt" });
-      setRows(listed);
-    } catch (loadError) {
-      setRows([]);
-      setError(String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: rows = [], isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ["worktreeList", ".wt"] as const,
+    queryFn: () => worktreeList({ basedir: ".wt" }),
+  });
 
-  useEffect(() => {
-    void load();
-  }, []);
+  const error = queryError ? String(queryError) : null;
 
   const search = useMemo(
     () =>
@@ -70,7 +57,7 @@ export function MvpRoute() {
               </Link>
               <button
                 type="button"
-                onClick={() => void load()}
+                onClick={() => void refetch()}
                 disabled={loading}
                 className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
               >

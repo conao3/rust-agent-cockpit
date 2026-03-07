@@ -2,8 +2,9 @@ import Add from "@spectrum-icons/workflow/Add";
 import Delete from "@spectrum-icons/workflow/Delete";
 import Magnify from "@spectrum-icons/workflow/Magnify";
 import OpenIn from "@spectrum-icons/workflow/OpenIn";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, Input, Label, SearchField } from "react-aria-components";
 import { cockpitCreate, cockpitDelete, cockpitList, type CockpitDocument } from "../cockpitApi";
 import { buildNewCockpitDocument, filterCockpits } from "./cockpitListModel";
@@ -25,59 +26,38 @@ function lastUsedLabel(): string {
 
 export function CockpitListRoute() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<CockpitDocument[]>([]);
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const listed = await cockpitList();
-      setRows(listed);
-    } catch (loadError) {
-      setRows([]);
-      setError(String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: rows = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["cockpitList"] as const,
+    queryFn: cockpitList,
+  });
 
-  useEffect(() => {
-    void load();
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: () => cockpitCreate({ cockpit: buildNewCockpitDocument() }),
+    onMutate: () => setPendingId("new"),
+    onSettled: () => setPendingId(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => cockpitDelete({ id }),
+    onSettled: () => setPendingId(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const }),
+  });
+
+  const error = queryError ? String(queryError) : createMutation.error ? String(createMutation.error) : deleteMutation.error ? String(deleteMutation.error) : null;
 
   const filtered = useMemo(() => filterCockpits(rows, query), [rows, query]);
 
-  const onCreate = async () => {
-    setPendingId("new");
-    setError(null);
-    try {
-      await cockpitCreate({ cockpit: buildNewCockpitDocument() });
-      await load();
-    } catch (createError) {
-      setError(String(createError));
-    } finally {
-      setPendingId(null);
-    }
-  };
-
-  const onDelete = async (id: string) => {
+  const onDelete = (id: string) => {
     if (!window.confirm(`Delete cockpit ${id}?`)) {
       return;
     }
     setPendingId(id);
-    setError(null);
-    try {
-      await cockpitDelete({ id });
-      await load();
-    } catch (deleteError) {
-      setError(String(deleteError));
-    } finally {
-      setPendingId(null);
-    }
+    deleteMutation.mutate(id);
   };
 
   return (
@@ -90,10 +70,10 @@ export function CockpitListRoute() {
               <p className="m-0 text-sm text-slate-400">Manage cockpit entries and jump into `/agent-cockpit/:cockpit_id`.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onPress={() => void load()} isDisabled={loading || pendingId !== null} className={buttonBaseClass}>
+              <Button type="button" onPress={() => queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const })} isDisabled={loading || pendingId !== null} className={buttonBaseClass}>
                 reload
               </Button>
-              <Button type="button" onPress={() => void onCreate()} isDisabled={pendingId !== null} className={buttonBaseClass}>
+              <Button type="button" onPress={() => createMutation.mutate()} isDisabled={pendingId !== null} className={buttonBaseClass}>
                 <Add size="S" />
                 {pendingId === "new" ? "creating..." : "new cockpit"}
               </Button>
@@ -168,7 +148,7 @@ export function CockpitListRoute() {
                         </Button>
                         <Button
                           type="button"
-                          onPress={() => void onDelete(row.id)}
+                          onPress={() => onDelete(row.id)}
                           isDisabled={pendingId === row.id || pendingId === "new"}
                           className={buttonBaseClass}
                         >
