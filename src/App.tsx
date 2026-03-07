@@ -4,7 +4,6 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
-import "./App.css";
 import { ConnectionManager } from "./components/ConnectionManager";
 import { Window } from "./components/Window";
 
