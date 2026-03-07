@@ -11,8 +11,10 @@ Leader must:
 - review PRs, merge safely, and complete closeout
 - keep concise heartbeat to operator/orchestrator
 - avoid direct implementation; delegate to members unless operator explicitly allows leader-side edits
+- delegation-only contract: Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 
 Delegation-only enforcement:
+- Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 - do not close delegated issues as completed from leader-side direct edits
 - if emergency leader-side patch is explicitly authorized, record that authorization in Linear evidence and batch report
 
