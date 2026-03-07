@@ -126,6 +126,12 @@ Before starting next batch:
 - run preflight `git status --short` and explicitly decide handling for dirty files before dispatch
 - start next batch with explicit mapping
 
+## K. Design Verification (Pencil MCP)
+
+- UI tasks should reference Pencil MCP for design checks.
+- Primary design file: `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
+- Include this file path in UI dispatch contracts and review checklists.
+
 Preflight decision guide:
 
 - treat known operator/runtime untracked files (e.g. `docs/design-pencil.pen`, `src-tauri/logs/`) as non-blocking

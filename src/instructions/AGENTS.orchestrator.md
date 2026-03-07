@@ -165,3 +165,9 @@ Log minimum fields:
 - evidence links (PR/CI/Linear comment IDs)
 - member run session identifiers (when visible dispatch starts)
 - ACK receipt timestamps per `task_id`
+
+## L. Design Verification (Pencil MCP)
+
+- Design can be inspected via Pencil MCP during implementation/review.
+- Primary design file: `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
+- When UI tasks are dispatched, include this reference in the task contract.

@@ -96,3 +96,9 @@ If Leader keeps the same batch open and immediately starts the next assignment s
 ## I. End-of-Batch Input
 
 Include concise lessons learned so Leader can recompose AGENTS docs cleanly each batch.
+
+## J. Design Verification (Pencil MCP)
+
+- For UI assignments, validate implementation against Pencil MCP design.
+- Primary design file: `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
+- Mention any intentional deviation from the design in the final handoff.
