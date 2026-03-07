@@ -67,12 +67,20 @@ For operator-visible runs (`agent-cockpit-team`):
 - launch one clean command
 - start confirmation requires `task_id`, `log`, and `thread.started`
 - monitor SLO: ACK <= 10m, heartbeat <= 20m (unless overridden)
+- do not use self-referential leader-log tailing as the primary control loop for recovery decisions
 
 Preferred runner:
 
 ```bash
 ./scripts/codex_exec_visible.sh <task-id> "<prompt>"
 ```
+
+Recovery priority when a leader run stalls:
+
+1. verify pane/process liveness
+2. stop the stalled leader run
+3. reinject explicit recovery tasks to target member panes with same `task_id`
+4. resume leader supervision after member ACK/heartbeat is re-established
 
 ## G. Acceptance Rules
 

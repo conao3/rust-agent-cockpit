@@ -58,6 +58,7 @@ git branch -d <feature-name>
 - require heartbeat by SLO window
 - if timeout/stall: reinject in same member pane
 - never dual-assign one `task_id`
+- if supervision stalls, do not keep tailing your own run log as the main action; switch to direct member-pane recovery
 
 Visible run hygiene in `agent-cockpit-team`:
 

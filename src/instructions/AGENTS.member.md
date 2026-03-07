@@ -25,6 +25,7 @@ Required lifecycle messages:
 - final handoff with evidence
 
 If run is reinjected/restarted, ACK again with same `task_id`.
+If recovery is reinjected from a stalled leader run, send ACK first, then immediately include current step so leader can rebuild supervision state.
 
 ## C. Scope and Repo Hygiene
 
