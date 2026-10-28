@@ -5,6 +5,7 @@ Leader runbook for multi-agent execution (`memberA`, `memberB`).
 ## 1. Responsibility
 
 Leader must:
+
 - transform operator goals into bounded tasks
 - assign exactly one owner per task
 - enforce scope, SLO, validation, and evidence contracts
@@ -14,6 +15,7 @@ Leader must:
 - delegation-only contract: Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 
 Delegation-only enforcement:
+
 - Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 - do not close delegated issues as completed from leader-side direct edits
 - if emergency leader-side patch is explicitly authorized, record that authorization in Linear evidence and batch report
@@ -21,6 +23,7 @@ Delegation-only enforcement:
 ## 2. Mandatory Delegation Contract
 
 Each delegation must include:
+
 - `task_id`
 - scope and non-scope
 - target files/areas
@@ -39,6 +42,7 @@ Each delegation must include:
 4. publish explicit mapping (`memberA=<issue>`, `memberB=<issue>`)
 
 Mixed-progress handling:
+
 - close out issue immediately when it reaches `in_review`
 - continue supervising sibling issue
 - after closeout, dispatch next pair when safe
@@ -46,11 +50,13 @@ Mixed-progress handling:
 ## 4. Worktree and Branch Rules
 
 Provision per-task worktree:
+
 ```bash
 git worktree add ./.wt/<feature-name> -b <feature-name>
 ```
 
 Cleanup after merge:
+
 ```bash
 git worktree remove ./.wt/<feature-name>
 git branch -d <feature-name>
@@ -62,6 +68,7 @@ If already cleaned, record and continue.
 ## 5. Runtime Supervision
 
 Leader must:
+
 - require immediate ACK
 - require heartbeat within SLO
 - reinject on stall (same owner first)
@@ -69,6 +76,7 @@ Leader must:
 - recover via direct member-pane actions
 
 Visible run hygiene (`agent-cockpit-team`):
+
 - `Ctrl-C` before launch
 - send command and `Enter` separately
 - confirm `task_id`, `log`, `thread.started`
@@ -77,6 +85,7 @@ Visible run hygiene (`agent-cockpit-team`):
 ## 6. Handoff Acceptance (`in_review`)
 
 Reject handoff unless all are present:
+
 - PR URL
 - head SHA
 - validation commands + results
@@ -89,6 +98,7 @@ If final `@Leader ... in_review` line is missing, post explicit evidence checkpo
 ## 7. PR Review and Merge Gate
 
 Before merge verify:
+
 - scope/non-scope compliance
 - no unrelated files/commits
 - required CI checks green
@@ -98,6 +108,7 @@ Before merge verify:
 If self-approval is unavailable, record manual review evidence and proceed with merge checks.
 
 Branch contamination handling:
+
 1. split into task-dedicated branches from `origin/master`
 2. restore task-pure history
 3. rerun validations and evidence checks
@@ -106,6 +117,7 @@ Branch contamination handling:
 ## 8. Closeout Gate (`done`)
 
 Mark done only when:
+
 1. PR merged
 2. Linear moved to `Done` or `Duplicate` with link
 3. worktree removed
@@ -113,22 +125,26 @@ Mark done only when:
 5. local `master` synced non-destructively
 
 Closeout timing rule:
+
 - if `in_review` is merge-ready, execute closeout in the same supervision cycle (no deferred closeout).
 
 ## 9. Blocker Protocol
 
 When blocked:
+
 - keep issue `In Review` (or `In Progress` as appropriate)
 - post blocker heartbeat (`reason`, `next action`)
 - delegate focused remediation
 - require fresh green checks before merge
 
 Known recurrent case:
+
 - CI setup ordering causes missing `pnpm`
 
 ## 10. End-of-Batch Duty
 
 Before next batch:
+
 - recompose all AGENTS docs coherently (not append-only)
 - remove duplicate/conflicting rules
 - commit and push docs update
@@ -140,16 +156,19 @@ Before next batch:
 - if previous batch process is still running, terminate it first and continue under the new batch id only
 
 Known non-blocking artifacts:
+
 - `src-tauri/logs/`
 - `docs/design-pencil.pen`
 
 Unexpected-change handling refinement:
+
 - known non-blocking artifacts above must not trigger batch stop prompts
 - only unknown/conflicting dirty entries can trigger pause/escalation
 
 ## 11. Linear Management
 
 Leader must keep Linear state and evidence synchronized:
+
 - transition states with actual progress
 - add evidence comments (PR/SHA/validation)
 - perform final `Done` transition after closeout gate
@@ -159,4 +178,5 @@ Leader must keep Linear state and evidence synchronized:
 
 For UI tasks, include Pencil MCP check in implementation and review.
 Design source:
+
 - `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`

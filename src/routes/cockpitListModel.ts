@@ -21,12 +21,17 @@ export function buildNewCockpitDocument(now = new Date()): CockpitDocument {
   };
 }
 
-export function filterCockpits(rows: CockpitDocument[], query: string): CockpitDocument[] {
+export function filterCockpits(
+  rows: CockpitDocument[],
+  query: string,
+): CockpitDocument[] {
   const needle = query.trim().toLowerCase();
   if (!needle) {
     return rows;
   }
   return rows.filter((row) =>
-    [row.id, row.title, row.cwd, row.taskId ?? "", row.member ?? ""].some((value) => value.toLowerCase().includes(needle)),
+    [row.id, row.title, row.cwd, row.taskId ?? "", row.member ?? ""].some(
+      (value) => value.toLowerCase().includes(needle),
+    ),
   );
 }

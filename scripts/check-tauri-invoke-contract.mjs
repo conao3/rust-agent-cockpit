@@ -20,7 +20,7 @@ for (const [command, usages] of invocations) {
   for (const usage of usages) {
     if (!usage.hasReqObject) {
       errors.push(
-        `${usage.file}:${usage.line}:${usage.column} invoke("${command}") must pass args as { req: ... }`
+        `${usage.file}:${usage.line}:${usage.column} invoke("${command}") must pass args as { req: ... }`,
       );
     }
   }
@@ -35,7 +35,7 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Tauri invoke contract check passed (${requiredReqCommands.size} req command(s), ${countInvocations(invocations)} invoke call(s))`
+  `Tauri invoke contract check passed (${requiredReqCommands.size} req command(s), ${countInvocations(invocations)} invoke call(s))`,
 );
 
 function listFrontendFiles(dir) {
@@ -72,19 +72,30 @@ function collectInvocations(files) {
   const result = new Map();
   for (const file of files) {
     const sourceText = fs.readFileSync(file, "utf8");
-    const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true);
+    const sourceFile = ts.createSourceFile(
+      file,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+    );
     visit(sourceFile, (node) => {
       if (!ts.isCallExpression(node)) {
         return;
       }
-      if (!ts.isIdentifier(node.expression) || node.expression.text !== "invoke") {
+      if (
+        !ts.isIdentifier(node.expression) ||
+        node.expression.text !== "invoke"
+      ) {
         return;
       }
       if (node.arguments.length === 0) {
         return;
       }
       const commandArg = node.arguments[0];
-      if (!ts.isStringLiteral(commandArg) && !ts.isNoSubstitutionTemplateLiteral(commandArg)) {
+      if (
+        !ts.isStringLiteral(commandArg) &&
+        !ts.isNoSubstitutionTemplateLiteral(commandArg)
+      ) {
         return;
       }
 
@@ -93,7 +104,10 @@ function collectInvocations(files) {
       let hasReqObject = false;
       if (secondArg && ts.isObjectLiteralExpression(secondArg)) {
         hasReqObject = secondArg.properties.some((property) => {
-          if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) {
+          if (
+            !ts.isPropertyAssignment(property) &&
+            !ts.isShorthandPropertyAssignment(property)
+          ) {
             return false;
           }
           const name = getPropName(property.name);
@@ -101,7 +115,9 @@ function collectInvocations(files) {
         });
       }
 
-      const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+      const pos = sourceFile.getLineAndCharacterOfPosition(
+        node.getStart(sourceFile),
+      );
       const usage = {
         file: path.relative(repoRoot, file),
         line: pos.line + 1,
@@ -123,7 +139,10 @@ function getPropName(nameNode) {
   if (ts.isIdentifier(nameNode)) {
     return nameNode.text;
   }
-  if (ts.isStringLiteral(nameNode) || ts.isNoSubstitutionTemplateLiteral(nameNode)) {
+  if (
+    ts.isStringLiteral(nameNode) ||
+    ts.isNoSubstitutionTemplateLiteral(nameNode)
+  ) {
     return nameNode.text;
   }
   return "";

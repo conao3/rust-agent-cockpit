@@ -11,7 +11,9 @@ import { AgentNode, type AgentNodeData } from "./components/AgentNode";
 
 export function resolvePtyCreateContext(search: string) {
   const params = new URLSearchParams(search);
-  const firstNonEmpty = (...values: Array<string | null>): string | undefined => {
+  const firstNonEmpty = (
+    ...values: Array<string | null>
+  ): string | undefined => {
     for (const value of values) {
       if (value) {
         const trimmed = value.trim();
@@ -24,7 +26,11 @@ export function resolvePtyCreateContext(search: string) {
   };
   return {
     cwd: firstNonEmpty(params.get("cwd")),
-    taskId: firstNonEmpty(params.get("pty"), params.get("task_id"), params.get("taskId")),
+    taskId: firstNonEmpty(
+      params.get("pty"),
+      params.get("task_id"),
+      params.get("taskId"),
+    ),
     member: firstNonEmpty(params.get("agent"), params.get("member")),
   };
 }
@@ -34,7 +40,10 @@ const nodeTypes = {
 } as const;
 
 function App() {
-  const context = useMemo(() => resolvePtyCreateContext(window.location.search), []);
+  const context = useMemo(
+    () => resolvePtyCreateContext(window.location.search),
+    [],
+  );
 
   const initialNodes: Node<AgentNodeData>[] = useMemo(
     () => [
@@ -55,13 +64,21 @@ function App() {
         id: "member-a",
         type: "agent",
         position: { x: 100, y: 220 },
-        data: { label: "Member A", role: "member", status: "online" } satisfies AgentNodeData,
+        data: {
+          label: "Member A",
+          role: "member",
+          status: "online",
+        } satisfies AgentNodeData,
       },
       {
         id: "member-b",
         type: "agent",
         position: { x: 500, y: 220 },
-        data: { label: "Member B", role: "member", status: "idle" } satisfies AgentNodeData,
+        data: {
+          label: "Member B",
+          role: "member",
+          status: "idle",
+        } satisfies AgentNodeData,
       },
     ],
     [context],

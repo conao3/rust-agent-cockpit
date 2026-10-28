@@ -1,4 +1,11 @@
-import { Link, Navigate, Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import {
+  Link,
+  Navigate,
+  Outlet,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import { CockpitListRoute } from "./routes/CockpitListRoute";
 import { HomeRoute } from "./routes/HomeRoute";
 import { LinearInboxRoute } from "./routes/LinearInboxRoute";
@@ -14,19 +21,25 @@ function RootLayout() {
   return (
     <div className="flex h-full w-full flex-col">
       <header className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-3 py-2">
-        <h1 className="m-0 text-xs font-bold uppercase tracking-[0.14em] text-slate-100">agent-cockpit</h1>
+        <h1 className="m-0 text-xs font-bold uppercase tracking-[0.14em] text-slate-100">
+          agent-cockpit
+        </h1>
         <nav className="flex gap-2" aria-label="primary">
           <Link
             to="/"
             className={navLinkClass}
-            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+            activeProps={{
+              className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900`,
+            }}
           >
             cockpits
           </Link>
           <Link
             to="/bootstrap"
             className={navLinkClass}
-            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+            activeProps={{
+              className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900`,
+            }}
           >
             mvp
           </Link>
@@ -34,7 +47,9 @@ function RootLayout() {
             to="/agent-cockpit/$cockpit_id/settings"
             params={{ cockpit_id: "default" }}
             className={navLinkClass}
-            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+            activeProps={{
+              className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900`,
+            }}
           >
             settings
           </Link>
@@ -42,7 +57,9 @@ function RootLayout() {
             to="/agent-cockpit/$cockpit_id/tasks"
             params={{ cockpit_id: "default" }}
             className={navLinkClass}
-            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+            activeProps={{
+              className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900`,
+            }}
           >
             tasks
           </Link>
@@ -50,7 +67,9 @@ function RootLayout() {
             to="/agent-cockpit/$cockpit_id/inbox"
             params={{ cockpit_id: "default" }}
             className={navLinkClass}
-            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+            activeProps={{
+              className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900`,
+            }}
           >
             inbox
           </Link>
@@ -58,7 +77,9 @@ function RootLayout() {
             to="/agent-cockpit/$cockpit_id/worktrees"
             params={{ cockpit_id: "default" }}
             className={navLinkClass}
-            activeProps={{ className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900` }}
+            activeProps={{
+              className: `${navLinkClass} border-cyan-300 bg-cyan-300 text-slate-900`,
+            }}
           >
             worktrees
           </Link>
@@ -100,15 +121,33 @@ const settingsRoute = createRoute({
 });
 
 function LegacySettingsRedirect() {
-  return <Navigate to="/agent-cockpit/$cockpit_id/settings" params={{ cockpit_id: "default" }} replace />;
+  return (
+    <Navigate
+      to="/agent-cockpit/$cockpit_id/settings"
+      params={{ cockpit_id: "default" }}
+      replace
+    />
+  );
 }
 
 function LegacyCockpitRedirect() {
-  return <Navigate to="/agent-cockpit/$cockpit_id" params={{ cockpit_id: "default" }} replace />;
+  return (
+    <Navigate
+      to="/agent-cockpit/$cockpit_id"
+      params={{ cockpit_id: "default" }}
+      replace
+    />
+  );
 }
 
 function LegacyInboxRedirect() {
-  return <Navigate to="/agent-cockpit/$cockpit_id/inbox" params={{ cockpit_id: "default" }} replace />;
+  return (
+    <Navigate
+      to="/agent-cockpit/$cockpit_id/inbox"
+      params={{ cockpit_id: "default" }}
+      replace
+    />
+  );
 }
 
 const legacyCockpitRoute = createRoute({

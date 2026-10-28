@@ -1,4 +1,9 @@
-const hookLifecycleEventKinds = ["input_wait", "tool_running", "completed", "error"] as const;
+const hookLifecycleEventKinds = [
+  "input_wait",
+  "tool_running",
+  "completed",
+  "error",
+] as const;
 
 type HookLifecycleEventKind = (typeof hookLifecycleEventKinds)[number];
 
@@ -59,7 +64,10 @@ function asHookEventKind(value: unknown, path: string): HookLifecycleEventKind {
   fail(`${path} must be valid hook event kind`);
 }
 
-function asLifecycleState(value: unknown, path: string): HookLifecycleEvent["currentState"] {
+function asLifecycleState(
+  value: unknown,
+  path: string,
+): HookLifecycleEvent["currentState"] {
   const parsed = asString(value, path);
   if (
     parsed === "sent" ||

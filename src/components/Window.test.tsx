@@ -9,7 +9,15 @@ afterEach(() => {
 describe("Window", () => {
   it("renders title, status, and content", () => {
     render(
-      <Window x={10} y={20} width={400} height={320} zIndex={3} title="PTY Terminal" status="connected">
+      <Window
+        x={10}
+        y={20}
+        width={400}
+        height={320}
+        zIndex={3}
+        title="PTY Terminal"
+        status="connected"
+      >
         <div>terminal content</div>
       </Window>,
     );
@@ -70,10 +78,13 @@ describe("Window", () => {
 
     expect(moved[moved.length - 1]).toEqual([60, 90]);
 
-    fireEvent.mouseDown(screen.getByRole("button", { name: "Connections resize" }), {
-      clientX: 200,
-      clientY: 210,
-    });
+    fireEvent.mouseDown(
+      screen.getByRole("button", { name: "Connections resize" }),
+      {
+        clientX: 200,
+        clientY: 210,
+      },
+    );
     fireEvent.mouseMove(window, { clientX: 260, clientY: 250 });
     fireEvent.mouseUp(window);
 

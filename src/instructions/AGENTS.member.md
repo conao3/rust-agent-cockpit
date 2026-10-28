@@ -5,6 +5,7 @@ Member runbook for delegated execution.
 ## 1. Responsibility
 
 Member must:
+
 - implement only delegated scope
 - work only in assigned worktree/branch
 - send structured lifecycle messages to Leader
@@ -13,23 +14,27 @@ Member must:
 - delegation-only contract: Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 
 Delegation integrity note:
+
 - Leader must not implement delegated task code/docs unless the operator explicitly authorizes it
 - if leader proposes to complete your assigned implementation directly without explicit operator authorization, raise a blocker line immediately
 
 ## 2. Message Contract
 
 All messages to Leader must use:
+
 ```text
 @Leader: <message>
 ```
 
 Required lifecycle messages:
+
 - start ACK: `@Leader: ACK <task-id> start`
 - periodic heartbeat within SLO: `@Leader: <task-id> heartbeat progress=<...> next=<...>`
 - blocker: include `reason` and `last_step`
 - final handoff: explicit `in_review` or `done`
 
 Reinjection/recovery rules:
+
 - if reinjected, ACK again with same `task_id`
 - if leader run was stalled, ACK then send current step immediately
 - send ACK before long-running command
@@ -52,6 +57,7 @@ Reinjection/recovery rules:
 ## 4. Branch Hygiene
 
 Before handoff:
+
 - keep commits task-pure
 - apply requested rebase/update
 - report updated SHA after rewrite/rebase
@@ -63,6 +69,7 @@ Before handoff:
 ## 5. Evidence Contract (`in_review`)
 
 Handoff must include:
+
 - `task_id`
 - PR URL
 - head SHA
@@ -72,11 +79,13 @@ Handoff must include:
 - recovered-branch guard result when applicable
 
 Template:
+
 ```text
 @Leader: <task-id> in_review. commit=<sha> pr=<url> validation='<cmds: ok>' files='<summary>' risks='<none|...>'
 ```
 
 Blocked template:
+
 ```text
 @Leader: <task-id> blocked. reason=<short-reason> last_step=<summary>
 ```
@@ -84,6 +93,7 @@ Blocked template:
 ## 6. Timing SLO
 
 Default SLO unless overridden:
+
 - ACK <= 10m
 - heartbeat <= 20m
 
@@ -113,10 +123,12 @@ Send concise lessons learned so Leader can recompose AGENTS docs next batch.
 ## 10. Linear and Design Notes
 
 Linear:
+
 - include task id/state context in updates so Leader can sync Linear correctly
 - when handoff state changes (`in_review`/`done`), send update details immediately so Linear state stays synchronized
 
 UI design verification:
+
 - verify UI tasks against Pencil MCP design source
 - `/home/conao/ghq/github.com/conao3/rust-agent-cockpit/docs/design-pencil.pen`
 - mention intentional deviations in final handoff

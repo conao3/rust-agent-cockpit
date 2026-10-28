@@ -31,14 +31,21 @@ function nextAgentId(existing: AgentSettings[]): string {
   return `agent-${index}`;
 }
 
-function normalizeSettings(settings: AgentSettingsDocument): AgentSettingsDocument {
+function normalizeSettings(
+  settings: AgentSettingsDocument,
+): AgentSettingsDocument {
   return {
-    version: Number.isFinite(settings.version) && settings.version > 0 ? Math.floor(settings.version) : 1,
+    version:
+      Number.isFinite(settings.version) && settings.version > 0
+        ? Math.floor(settings.version)
+        : 1,
     agents: settings.agents.map((agent) => ({
       id: agent.id.trim(),
       name: agent.name.trim(),
       command: agent.command.trim(),
-      systemPrompt: agent.systemPrompt?.trim() ? agent.systemPrompt.trim() : null,
+      systemPrompt: agent.systemPrompt?.trim()
+        ? agent.systemPrompt.trim()
+        : null,
       toolRestrictions: agent.toolRestrictions
         .map((tool) => tool.trim())
         .filter((tool) => tool.length > 0),
@@ -52,11 +59,17 @@ type AgentSettingsPanelProps = {
 
 export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
   const queryClient = useQueryClient();
-  const [settings, setSettings] = useState<AgentSettingsDocument>(emptyDocument);
-  const [baseline, setBaseline] = useState<AgentSettingsDocument>(emptyDocument);
+  const [settings, setSettings] =
+    useState<AgentSettingsDocument>(emptyDocument);
+  const [baseline, setBaseline] =
+    useState<AgentSettingsDocument>(emptyDocument);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const { data: fetched, isLoading: loading, error: queryError } = useQuery({
+  const {
+    data: fetched,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: ["agentSettings", cockpitId] as const,
     queryFn: () => agentSettingsGet({ cockpitId }),
   });
@@ -71,24 +84,40 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
   }, [fetched]);
 
   const saveMutation = useMutation({
-    mutationFn: () => agentSettingsSave({ cockpitId, settings: normalizeSettings(settings) }),
+    mutationFn: () =>
+      agentSettingsSave({ cockpitId, settings: normalizeSettings(settings) }),
     onSuccess: (saved) => {
       const snapshot = cloneDocument(saved);
       setSettings(snapshot);
       setBaseline(snapshot);
       setNotice("settings saved");
-      queryClient.invalidateQueries({ queryKey: ["agentSettings", cockpitId] as const });
+      queryClient.invalidateQueries({
+        queryKey: ["agentSettings", cockpitId] as const,
+      });
     },
   });
 
-  const error = queryError ? String(queryError) : saveMutation.error ? String(saveMutation.error) : null;
+  const error = queryError
+    ? String(queryError)
+    : saveMutation.error
+      ? String(saveMutation.error)
+      : null;
   const saving = saveMutation.isPending;
-  const dirty = useMemo(() => JSON.stringify(settings) !== JSON.stringify(baseline), [settings, baseline]);
+  const dirty = useMemo(
+    () => JSON.stringify(settings) !== JSON.stringify(baseline),
+    [settings, baseline],
+  );
 
-  const updateAgent = <K extends keyof AgentSettings>(index: number, key: K, value: AgentSettings[K]) => {
+  const updateAgent = <K extends keyof AgentSettings>(
+    index: number,
+    key: K,
+    value: AgentSettings[K],
+  ) => {
     setSettings((current) => ({
       ...current,
-      agents: current.agents.map((agent, agentIndex) => (agentIndex === index ? { ...agent, [key]: value } : agent)),
+      agents: current.agents.map((agent, agentIndex) =>
+        agentIndex === index ? { ...agent, [key]: value } : agent,
+      ),
     }));
     setNotice(null);
   };
@@ -123,13 +152,22 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
       <section className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">Agent Settings</h2>
-            <div className="m-0 text-sm text-slate-400">Edit runtime profiles and save to .agent-cockpit/agent-settings.toml.</div>
+            <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">
+              Agent Settings
+            </h2>
+            <div className="m-0 text-sm text-slate-400">
+              Edit runtime profiles and save to
+              .agent-cockpit/agent-settings.toml.
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => queryClient.invalidateQueries({ queryKey: ["agentSettings", cockpitId] as const })}
+              onClick={() =>
+                queryClient.invalidateQueries({
+                  queryKey: ["agentSettings", cockpitId] as const,
+                })
+              }
               disabled={loading || saving}
               className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50"
             >
@@ -165,25 +203,41 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
               className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
             />
           </label>
-          <span className="text-slate-500">agents: {settings.agents.length}</span>
-          {dirty ? <span className="text-amber-300">unsaved changes</span> : <span className="text-emerald-300">saved</span>}
+          <span className="text-slate-500">
+            agents: {settings.agents.length}
+          </span>
+          {dirty ? (
+            <span className="text-amber-300">unsaved changes</span>
+          ) : (
+            <span className="text-emerald-300">saved</span>
+          )}
         </div>
 
         {error ? (
-          <div role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+          <div
+            role="alert"
+            className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300"
+          >
             {error}
           </div>
         ) : null}
         {notice ? (
-          <div className="mt-3 rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</div>
+          <div className="mt-3 rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
+            {notice}
+          </div>
         ) : null}
       </section>
 
       <section className="space-y-3">
         {settings.agents.map((agent, index) => (
-          <article key={`${agent.id}-${index}`} className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+          <article
+            key={`${agent.id}-${index}`}
+            className="rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+          >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="m-0 text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">agent {index + 1}</h3>
+              <h3 className="m-0 text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
+                agent {index + 1}
+              </h3>
               <button
                 type="button"
                 onClick={() => removeAgent(index)}
@@ -198,7 +252,9 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
                 <input
                   aria-label={`agent ${index + 1} id`}
                   value={agent.id}
-                  onChange={(event) => updateAgent(index, "id", event.target.value)}
+                  onChange={(event) =>
+                    updateAgent(index, "id", event.target.value)
+                  }
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100"
                 />
               </label>
@@ -207,7 +263,9 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
                 <input
                   aria-label={`agent ${index + 1} name`}
                   value={agent.name}
-                  onChange={(event) => updateAgent(index, "name", event.target.value)}
+                  onChange={(event) =>
+                    updateAgent(index, "name", event.target.value)
+                  }
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100"
                 />
               </label>
@@ -216,7 +274,9 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
                 <input
                   aria-label={`agent ${index + 1} command`}
                   value={agent.command}
-                  onChange={(event) => updateAgent(index, "command", event.target.value)}
+                  onChange={(event) =>
+                    updateAgent(index, "command", event.target.value)
+                  }
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100"
                 />
               </label>
@@ -225,7 +285,13 @@ export function AgentSettingsPanel({ cockpitId }: AgentSettingsPanelProps) {
                 <textarea
                   aria-label={`agent ${index + 1} system prompt`}
                   value={agent.systemPrompt ?? ""}
-                  onChange={(event) => updateAgent(index, "systemPrompt", event.target.value || null)}
+                  onChange={(event) =>
+                    updateAgent(
+                      index,
+                      "systemPrompt",
+                      event.target.value || null,
+                    )
+                  }
                   rows={3}
                   className="w-full resize-y rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100"
                 />

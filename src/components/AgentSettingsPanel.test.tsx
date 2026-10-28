@@ -1,5 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentSettingsPanel } from "./AgentSettingsPanel";
@@ -14,7 +21,9 @@ const getMock = vi.mocked(agentSettingsGet);
 const saveMock = vi.mocked(agentSettingsSave);
 
 function Wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
@@ -111,8 +120,12 @@ describe("AgentSettingsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "add agent" }));
 
     await screen.findByLabelText("agent 1 id");
-    fireEvent.change(screen.getByLabelText("agent 1 id"), { target: { value: "agent-1" } });
-    fireEvent.change(screen.getByLabelText("agent 1 name"), { target: { value: "Member A" } });
+    fireEvent.change(screen.getByLabelText("agent 1 id"), {
+      target: { value: "agent-1" },
+    });
+    fireEvent.change(screen.getByLabelText("agent 1 name"), {
+      target: { value: "Member A" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "save" }));
 
@@ -120,7 +133,9 @@ describe("AgentSettingsPanel", () => {
 
     const row = screen.getByText("agent 1").closest("article");
     expect(row).toBeTruthy();
-    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "remove" }));
+    fireEvent.click(
+      within(row as HTMLElement).getByRole("button", { name: "remove" }),
+    );
     expect(screen.queryByText("agent 1")).toBeNull();
   });
 

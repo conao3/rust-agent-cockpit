@@ -37,7 +37,11 @@ const checks = [
   {
     id: "immediate_closeout_merge_ready",
     label: "immediate closeout on merge-ready in_review",
-    patterns: [/merge-ready/i, /in_review/i, /immediate|same supervision cycle|without delay/i],
+    patterns: [
+      /merge-ready/i,
+      /in_review/i,
+      /immediate|same supervision cycle|without delay/i,
+    ],
   },
   {
     id: "linear_sync",
@@ -58,7 +62,9 @@ for (const relativePath of docPaths) {
   const absolutePath = path.join(repoRoot, relativePath);
   const content = fs.readFileSync(absolutePath, "utf8");
   const missing = checks
-    .filter((check) => !check.patterns.every((pattern) => pattern.test(content)))
+    .filter(
+      (check) => !check.patterns.every((pattern) => pattern.test(content)),
+    )
     .map((check) => check.label);
 
   if (missing.length > 0) {
@@ -77,4 +83,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`AGENTS contract completeness check passed (${docPaths.length} docs).`);
+console.log(
+  `AGENTS contract completeness check passed (${docPaths.length} docs).`,
+);

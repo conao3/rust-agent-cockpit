@@ -106,18 +106,23 @@ function parseList(payload: unknown): WorktreeListItem[] {
   });
 }
 
-export async function worktreeCreate(req: WorktreeCreateRequest): Promise<WorktreeLifecycleResponse> {
+export async function worktreeCreate(
+  req: WorktreeCreateRequest,
+): Promise<WorktreeLifecycleResponse> {
   const payload = await invoke<unknown>("worktree_create", { req });
   return parseLifecycle(payload);
 }
 
-export async function worktreeDelete(req: WorktreeDeleteRequest): Promise<WorktreeDeleteResponse> {
+export async function worktreeDelete(
+  req: WorktreeDeleteRequest,
+): Promise<WorktreeDeleteResponse> {
   const payload = await invoke<unknown>("worktree_delete", { req });
   return parseDelete(payload);
 }
 
-export async function worktreeList(req: WorktreeListRequest): Promise<WorktreeListItem[]> {
+export async function worktreeList(
+  req: WorktreeListRequest,
+): Promise<WorktreeListItem[]> {
   const payload = await invoke<unknown>("worktree_list", { req });
   return parseList(payload);
 }
-

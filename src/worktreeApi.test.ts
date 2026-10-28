@@ -55,7 +55,9 @@ describe("worktreeApi", () => {
         branch: "feature/con-71",
         basedir: ".wt",
       }),
-    ).rejects.toThrow("worktree response invalid: root.created must be boolean");
+    ).rejects.toThrow(
+      "worktree response invalid: root.created must be boolean",
+    );
   });
 
   it("invokes worktree_delete with req wrapper", async () => {
@@ -91,7 +93,9 @@ describe("worktreeApi", () => {
         branch: "feature/con-71",
         basedir: ".wt",
       }),
-    ).rejects.toThrow("worktree response invalid: root.removed must be boolean");
+    ).rejects.toThrow(
+      "worktree response invalid: root.removed must be boolean",
+    );
   });
 
   it("invokes worktree_list and propagates backend failures", async () => {

@@ -14,24 +14,24 @@ References:
 
 Use `@spectrum-icons/workflow` for primary actions and navigation, `@spectrum-icons/ui` for compact UI controls.
 
-| Location | Icon | Package | Notes |
-|---|---|---|---|
-| Header — settings button | `Settings` | workflow | right side of all screen headers |
-| Window title bar — close | `CrossSmall` | ui | replaces colored dot close button |
-| Agent node — connect handle | `ArrowRight` | workflow | drag handle to create connections |
-| Add connection / add agent | `Add` | workflow | "+" action buttons |
-| Edit connection/item | `Edit` | workflow | inline edit in lists/tables |
-| Delete connection/item | `Delete` | workflow | inline delete in lists/tables |
-| Search field | `Magnify` | workflow | search inputs |
-| Filter control | `Filter` | workflow | filter toolbar buttons |
-| Dropdown indicator | `ChevronDown` | ui | select/dropdown fields |
-| Task status — done | `Checkmark` | ui | done state indicator |
-| Task status — failed | `AlertCircle` | workflow | failed/error state |
-| Task status — in_progress | `Refresh` | workflow | spinning when active |
-| Worktree — open | `OpenIn` | workflow | open worktree action |
-| Worktree — delete | `Delete` | workflow | delete worktree action |
-| Linear inbox — delivered | `CheckmarkCircle` | workflow | delivered status |
-| Linear inbox — unroutable | `AlertCircle` | workflow | unroutable status |
+| Location                    | Icon              | Package  | Notes                             |
+| --------------------------- | ----------------- | -------- | --------------------------------- |
+| Header — settings button    | `Settings`        | workflow | right side of all screen headers  |
+| Window title bar — close    | `CrossSmall`      | ui       | replaces colored dot close button |
+| Agent node — connect handle | `ArrowRight`      | workflow | drag handle to create connections |
+| Add connection / add agent  | `Add`             | workflow | "+" action buttons                |
+| Edit connection/item        | `Edit`            | workflow | inline edit in lists/tables       |
+| Delete connection/item      | `Delete`          | workflow | inline delete in lists/tables     |
+| Search field                | `Magnify`         | workflow | search inputs                     |
+| Filter control              | `Filter`          | workflow | filter toolbar buttons            |
+| Dropdown indicator          | `ChevronDown`     | ui       | select/dropdown fields            |
+| Task status — done          | `Checkmark`       | ui       | done state indicator              |
+| Task status — failed        | `AlertCircle`     | workflow | failed/error state                |
+| Task status — in_progress   | `Refresh`         | workflow | spinning when active              |
+| Worktree — open             | `OpenIn`          | workflow | open worktree action              |
+| Worktree — delete           | `Delete`          | workflow | delete worktree action            |
+| Linear inbox — delivered    | `CheckmarkCircle` | workflow | delivered status                  |
+| Linear inbox — unroutable   | `AlertCircle`     | workflow | unroutable status                 |
 
 ## 1. Product Intent
 
@@ -51,20 +51,21 @@ Core goals:
 - Navigation is mostly **in-canvas window/panel interaction**, not full page transitions
 - All cockpit-specific screens are nested under `/agent-cockpit/:cockpit_id`
 - Separate the design file into:
+
 1. Implemented screens (current reality)
 2. Planned screens (next-phase UI)
 
 ## Route Map
 
-| Route | Screen | Notes |
-|---|---|---|
-| `/` | SCR-050 Cockpit List | list/create cockpit instances |
-| `/agent-cockpit/:cockpit_id` | SCR-100 Cockpit Desktop | main canvas |
-| `/agent-cockpit/:cockpit_id?pty=:task_id&agent=:agent_id&cwd=:cwd` | SCR-120 PTY Terminal | query-driven PTY window |
-| `/agent-cockpit/:cockpit_id/tasks` | SCR-130 Task Lifecycle Monitor | |
-| `/agent-cockpit/:cockpit_id/inbox` | SCR-140 Linear Inbox | |
-| `/agent-cockpit/:cockpit_id/settings` | SCR-150 Agent Settings | |
-| `/agent-cockpit/:cockpit_id/worktrees` | SCR-160 Worktree Manager | |
+| Route                                                              | Screen                         | Notes                         |
+| ------------------------------------------------------------------ | ------------------------------ | ----------------------------- |
+| `/`                                                                | SCR-050 Cockpit List           | list/create cockpit instances |
+| `/agent-cockpit/:cockpit_id`                                       | SCR-100 Cockpit Desktop        | main canvas                   |
+| `/agent-cockpit/:cockpit_id?pty=:task_id&agent=:agent_id&cwd=:cwd` | SCR-120 PTY Terminal           | query-driven PTY window       |
+| `/agent-cockpit/:cockpit_id/tasks`                                 | SCR-130 Task Lifecycle Monitor |                               |
+| `/agent-cockpit/:cockpit_id/inbox`                                 | SCR-140 Linear Inbox           |                               |
+| `/agent-cockpit/:cockpit_id/settings`                              | SCR-150 Agent Settings         |                               |
+| `/agent-cockpit/:cockpit_id/worktrees`                             | SCR-160 Worktree Manager       |                               |
 
 ## 3. Primary Users
 
@@ -90,10 +91,13 @@ Core goals:
 - Route: `/`
 - Purpose: manage and select agent cockpit instances
 - Main content:
+
 1. list of saved cockpits (name, id, agent count, status, last_used)
 2. create new cockpit action
 3. open / duplicate / delete per-cockpit actions
+
 - Expected commands:
+
 1. `cockpit_list`
 2. `cockpit_create`
 3. `cockpit_delete`
@@ -103,9 +107,11 @@ Core goals:
 - Status: Implemented
 - Purpose: initialize backend and app runtime state
 - Main behavior:
+
 1. backend monitoring runner starts automatically
 2. initial windows are created (Connections, PTY Terminal)
 3. PTY context is parsed from query (`task_id/taskId`, `member/agent`, `cwd`)
+
 - Next: `SCR-100`
 
 ### SCR-100: Cockpit Desktop
@@ -113,17 +119,24 @@ Core goals:
 - Status: Implemented
 - Purpose: central operation canvas
 - Main UI:
+
 1. desktop canvas
 2. movable/resizable windows
 3. z-order focus management
+
 - State:
+
 1. terminal status `connecting|connected|error`
 2. per-window position and size
+
 - User actions:
+
 1. activate window
 2. move window
 3. resize window
+
 - Internal transitions:
+
 1. to `SCR-110` (Connections interactions)
 2. to `SCR-120` (Terminal interactions)
 
@@ -132,17 +145,23 @@ Core goals:
 - Status: Implemented
 - Purpose: model/edit directed agent communication edges
 - Main UI:
+
 1. graph view (React Flow)
 2. connection form (`source`, `target`, `description`)
 3. connection list with `edit/remove`
+
 - Main actions:
+
 1. add connection
 2. edit connection
 3. remove connection
+
 - Validation:
+
 1. source and target are required
 2. source and target must differ
 3. duplicate edge is not allowed
+
 - Note: currently local UI state only; persistence/runtime routing sync is future scope
 
 ### SCR-120: PTY Terminal Window
@@ -150,16 +169,23 @@ Core goals:
 - Status: Implemented
 - Purpose: display and interact with agent process I/O
 - Main UI:
+
 1. xterm.js terminal
 2. connection status badge
+
 - Backend commands:
+
 1. `pty_create`
 2. `pty_write`
 3. `pty_resize`
 4. `pty_close`
+
 - Event stream:
+
 1. listens to `pty-output`
+
 - Error presentation:
+
 1. `[pty_create/listen error] ...`
 2. `[pty_write error] ...`
 3. `[pty_resize error] ...`
@@ -169,15 +195,20 @@ Core goals:
 - Status: Planned
 - Purpose: operational visibility of orchestration lifecycle
 - Main content:
+
 1. lifecycle states (`queued/sent/acknowledged/in_progress/in_review/done/failed`)
 2. current state by `task_id x member`
 3. ACK/heartbeat SLA breach alerts
+
 - Expected commands:
+
 1. `task_register_definition`
 2. `task_transition_lifecycle`
 3. `task_get_lifecycle`
 4. `monitoring_get_lifecycle_state`
+
 - Main actions:
+
 1. inspect progress
 2. detect stalled runs
 3. trigger recovery/re-dispatch
@@ -187,13 +218,18 @@ Core goals:
 - Status: Planned
 - Purpose: observe and debug Linear-based message delivery
 - Main content:
+
 1. incoming comment history
 2. resolved target member
 3. decision status (`delivered/unroutable/duplicate`)
+
 - Expected commands:
+
 1. `linear_ingest_webhook_comment`
 2. `linear_ingest_poll_comments`
+
 - Main actions:
+
 1. verify routing success
 2. investigate unroutable/duplicate cases
 
@@ -202,10 +238,13 @@ Core goals:
 - Status: Planned
 - Purpose: manage agent runtime profiles
 - Expected fields:
+
 1. agent id/name/command
 2. restrictions
 3. defaults
+
 - Expected commands:
+
 1. `agent_settings_get`
 2. `agent_settings_save`
 
@@ -214,10 +253,13 @@ Core goals:
 - Status: Planned
 - Purpose: manage task-isolated worktree lifecycle
 - Main actions:
+
 1. create/open/close/delete worktree
 2. view title/metadata
 3. prepare hooks
+
 - Expected commands:
+
 1. `worktree_create`
 2. `worktree_open`
 3. `worktree_close`
