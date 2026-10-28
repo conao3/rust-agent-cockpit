@@ -32,10 +32,11 @@
           ...
         }:
         let
-          overlay = final: prev:
+          overlay =
+            final: prev:
             let
-              nodejs = prev.nodejs_24;
-              pnpm = prev.pnpm_10.override { inherit nodejs; };
+              nodejs = prev.nodejs_latest;
+              pnpm = prev.pnpm.override { nodejs-slim = nodejs; };
               rustToolchain = prev.rust-bin.stable.latest.default;
             in
             {
@@ -72,8 +73,7 @@
               pkg-config
             ];
 
-            buildInputs =
-              if pkgs.stdenv.isLinux then linuxBuildInputs else darwinBuildInputs;
+            buildInputs = if pkgs.stdenv.isLinux then linuxBuildInputs else darwinBuildInputs;
 
             env = lib.optionalAttrs pkgs.stdenv.isLinux {
               GIO_MODULE_PATH = "${pkgs.glib-networking}/lib/gio/modules";
