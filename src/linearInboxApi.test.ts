@@ -137,6 +137,8 @@ describe("linearInboxApi", () => {
         ptyId: null,
         eventKey: "linear:comment:1",
       }),
-    ).toThrow("linear inbox response invalid: root.decision must be valid linear message decision");
+    ).toThrow(
+      "linear inbox response invalid: root.decision must be valid linear message decision",
+    );
   });
 });

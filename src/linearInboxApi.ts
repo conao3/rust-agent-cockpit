@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type LinearMessageDecision = "delivered" | "duplicate" | "unroutable";
+type LinearMessageDecision = "delivered" | "duplicate" | "unroutable";
 
 type LinearCommentEnvelope = {
   issueId: string;
@@ -53,7 +53,9 @@ function asDecision(value: unknown, path: string): LinearMessageDecision {
   fail(`${path} must be valid linear message decision`);
 }
 
-export function parseLinearMessageIngestResponse(payload: unknown): LinearMessageIngestResponse {
+export function parseLinearMessageIngestResponse(
+  payload: unknown,
+): LinearMessageIngestResponse {
   const root = asRecord(payload, "root");
   return {
     decision: asDecision(root.decision, "root.decision"),
@@ -96,5 +98,7 @@ export async function linearIngestPollComments(
   if (!Array.isArray(payload)) {
     fail("root must be array");
   }
-  return payload.map((entry, index) => parseLinearMessageIngestResponse(asRecord(entry, `root[${index}]`)));
+  return payload.map((entry, index) =>
+    parseLinearMessageIngestResponse(asRecord(entry, `root[${index}]`)),
+  );
 }

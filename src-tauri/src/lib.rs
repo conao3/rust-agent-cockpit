@@ -1,7 +1,7 @@
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
-use std::fs::{create_dir_all, OpenOptions};
+use std::fs::{OpenOptions, create_dir_all};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
@@ -11,8 +11,8 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
     },
     thread::{self, JoinHandle},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -1210,7 +1210,10 @@ fn validate_cockpit_id(id: &str) -> Result<String, String> {
     Err("cockpit.id must contain only [A-Za-z0-9._-]".to_string())
 }
 
-fn normalize_optional_cockpit_field(value: Option<String>, field: &str) -> Result<Option<String>, String> {
+fn normalize_optional_cockpit_field(
+    value: Option<String>,
+    field: &str,
+) -> Result<Option<String>, String> {
     match value {
         Some(raw) => {
             let trimmed = raw.trim();
@@ -1272,7 +1275,10 @@ fn list_cockpits(cockpit_root: &Path) -> Result<Vec<CockpitDocument>, String> {
     Ok(cockpits)
 }
 
-fn create_cockpit(cockpit_root: &Path, cockpit: CockpitDocument) -> Result<CockpitDocument, String> {
+fn create_cockpit(
+    cockpit_root: &Path,
+    cockpit: CockpitDocument,
+) -> Result<CockpitDocument, String> {
     let cockpit = normalize_cockpit_document(cockpit)?;
     let path = cockpit_file_path(cockpit_root, &cockpit.id);
     if path.exists() {
@@ -1295,7 +1301,8 @@ fn delete_cockpit(cockpit_root: &Path, cockpit_id: &str) -> Result<bool, String>
     if !path.exists() {
         return Ok(false);
     }
-    fs::remove_file(&path).map_err(|e| format!("delete cockpit failed for {}: {e}", path.display()))?;
+    fs::remove_file(&path)
+        .map_err(|e| format!("delete cockpit failed for {}: {e}", path.display()))?;
     Ok(true)
 }
 
@@ -1689,7 +1696,12 @@ fn normalize_hook_lifecycle_event_kind(value: &str) -> Option<HookLifecycleEvent
 }
 
 fn extract_hook_lifecycle_event(payload: &serde_json::Value) -> Option<HookLifecycleEventEnvelope> {
-    for key in ["hook_event_name", "hookEventName", "hook_event", "hookEvent"] {
+    for key in [
+        "hook_event_name",
+        "hookEventName",
+        "hook_event",
+        "hookEvent",
+    ] {
         if let Some(raw) = payload.get(key).and_then(|value| value.as_str()) {
             let kind = normalize_hook_lifecycle_event_kind(raw)?;
             return Some(HookLifecycleEventEnvelope {
@@ -3504,7 +3516,10 @@ mod tests {
             assert_eq!(event.request.task_id, "CON-76");
             assert_eq!(event.request.member, "MemberA");
             assert_eq!(event.request.state, expected);
-            assert_eq!(event.hook_event.as_ref().map(|value| value.kind), Some(expected_hook));
+            assert_eq!(
+                event.hook_event.as_ref().map(|value| value.kind),
+                Some(expected_hook)
+            );
             assert!(
                 event
                     .hook_event
@@ -3647,12 +3662,16 @@ branch refs/heads/feature/con-71
         opened.insert(a_dir.to_string_lossy().to_string());
         let entries = list_worktrees(&repo_root, &basedir, &opened).unwrap();
         assert_eq!(entries.len(), 2);
-        assert!(entries
-            .iter()
-            .any(|entry| entry.branch == "feature/con-71-a" && entry.opened));
-        assert!(entries
-            .iter()
-            .any(|entry| entry.branch == "feature/con-71-b" && !entry.opened));
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.branch == "feature/con-71-a" && entry.opened)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.branch == "feature/con-71-b" && !entry.opened)
+        );
     }
 
     #[test]

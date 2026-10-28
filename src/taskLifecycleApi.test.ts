@@ -157,6 +157,8 @@ describe("taskLifecycleApi", () => {
         taskId: "CON-107",
         member: "MemberB",
       }),
-    ).rejects.toThrow("task lifecycle response invalid: root.state must be valid lifecycle state");
+    ).rejects.toThrow(
+      "task lifecycle response invalid: root.state must be valid lifecycle state",
+    );
   });
 });

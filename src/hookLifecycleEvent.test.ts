@@ -32,6 +32,8 @@ describe("hookLifecycleEvent", () => {
         messageId: null,
         rawHookEvent: null,
       }),
-    ).toThrow("hook lifecycle event invalid: root.hookEvent must be valid hook event kind");
+    ).toThrow(
+      "hook lifecycle event invalid: root.hookEvent must be valid hook event kind",
+    );
   });
 });

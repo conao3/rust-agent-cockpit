@@ -34,7 +34,8 @@ export function usePtyMutations() {
   });
 
   const createPty = useCallback(
-    (req: PtyCreateRequest): Promise<PtyCreateResponse> => createMutation.mutateAsync(req),
+    (req: PtyCreateRequest): Promise<PtyCreateResponse> =>
+      createMutation.mutateAsync(req),
     [createMutation],
   );
   const writePty = useCallback(

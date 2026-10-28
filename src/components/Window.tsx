@@ -1,4 +1,9 @@
-import { useEffect, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 
 type WindowProps = {
   x: number;
@@ -14,23 +19,19 @@ type WindowProps = {
   onResize?: (width: number, height: number) => void;
 };
 
-type DragState =
-  | {
-      originMouseX: number;
-      originMouseY: number;
-      originX: number;
-      originY: number;
-    }
-  | null;
+type DragState = {
+  originMouseX: number;
+  originMouseY: number;
+  originX: number;
+  originY: number;
+} | null;
 
-type ResizeState =
-  | {
-      originMouseX: number;
-      originMouseY: number;
-      originWidth: number;
-      originHeight: number;
-    }
-  | null;
+type ResizeState = {
+  originMouseX: number;
+  originMouseY: number;
+  originWidth: number;
+  originHeight: number;
+} | null;
 
 const statusClassNames: Record<string, string> = {
   connecting: "bg-blue-950 text-blue-200",
@@ -67,7 +68,10 @@ export function Window({
       if (resizeState && onResize) {
         const deltaX = event.clientX - resizeState.originMouseX;
         const deltaY = event.clientY - resizeState.originMouseY;
-        onResize(resizeState.originWidth + deltaX, resizeState.originHeight + deltaY);
+        onResize(
+          resizeState.originWidth + deltaX,
+          resizeState.originHeight + deltaY,
+        );
       }
     };
 
@@ -126,7 +130,9 @@ export function Window({
         className="flex cursor-grab select-none items-center justify-between border-b border-slate-700 px-3 py-2 active:cursor-grabbing"
         onMouseDown={handleDragStart}
       >
-        <h1 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-slate-100">{title}</h1>
+        <h1 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-slate-100">
+          {title}
+        </h1>
         {status ? (
           <span
             aria-live="polite"

@@ -42,14 +42,14 @@ Backend (Rust + Tauri)
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Desktop framework | Tauri 2 |
-| Frontend | React 19, TypeScript, Vite |
-| Backend | Rust (stable) |
-| Package manager | pnpm 10, Node 24 |
-| Formatter | treefmt (nixfmt, rustfmt, prettier) |
-| Platforms | x86_64-linux, aarch64-darwin |
+| Layer             | Technology                          |
+| ----------------- | ----------------------------------- |
+| Desktop framework | Tauri 2                             |
+| Frontend          | React 19, TypeScript, Vite          |
+| Backend           | Rust (stable)                       |
+| Package manager   | pnpm 10, Node 24                    |
+| Formatter         | treefmt (nixfmt, rustfmt, prettier) |
+| Platforms         | x86_64-linux, aarch64-darwin        |
 
 ## Agent Messaging
 
@@ -81,12 +81,12 @@ No manual orchestrator watch process is required.
 
 ### States
 
-| State | Hook event | UI indicator |
-|---|---|---|
-| Waiting for input | `Stop` | Green border |
-| Executing tool | `PostToolUse` | Yellow border |
-| Thinking | `PreToolUse` | Blue border |
-| Error | non-zero exit | Red border |
+| State             | Hook event    | UI indicator  |
+| ----------------- | ------------- | ------------- |
+| Waiting for input | `Stop`        | Green border  |
+| Executing tool    | `PostToolUse` | Yellow border |
+| Thinking          | `PreToolUse`  | Blue border   |
+| Error             | non-zero exit | Red border    |
 
 ### Hook Isolation
 
@@ -102,12 +102,12 @@ Each agent runs inside its own **git worktree**, keeping branches isolated.
 
 ### Configuration (per repository)
 
-| Key | Description |
-|---|---|
-| `basedir` | Directory where worktrees are created |
-| `hook` | Shell command to run after worktree creation (e.g. `pnpm install`) |
-| `deletehook` | Shell command to run before worktree deletion |
-| `copyignored` | Copy `.gitignore`-listed files (e.g. `.env`) into new worktrees |
+| Key           | Description                                                        |
+| ------------- | ------------------------------------------------------------------ |
+| `basedir`     | Directory where worktrees are created                              |
+| `hook`        | Shell command to run after worktree creation (e.g. `pnpm install`) |
+| `deletehook`  | Shell command to run before worktree deletion                      |
+| `copyignored` | Copy `.gitignore`-listed files (e.g. `.env`) into new worktrees    |
 
 ### Lifecycle
 
@@ -160,17 +160,17 @@ The leader receives a task from the human operator, breaks it down, and delegate
 
 ## Development Roadmap
 
-| Phase | Milestone | Key deliverables |
-|---|---|---|
-| 0 | Project setup | flake.nix, Makefile, base dependencies |
-| 1 | PTY foundation | portable-pty backend, xterm.js frontend, IPC |
-| 2 | Window management | DE-like layout, drag, resize, z-order |
-| 3 | Graph UI | SVG edge overlay, edge create/delete |
-| 4 | Message routing | Linear webhook/polling, PTY stdin injection |
-| 4b | Agent state monitoring | Claude Code hooks, per-worktree settings |
-| 5 | Agent config GUI | Config model, TOML persistence, settings UI |
-| 5b | Worktree management | git worktree lifecycle, UI |
-| 6 | MVP integration | 3-agent demo, end-to-end validation |
+| Phase | Milestone              | Key deliverables                             |
+| ----- | ---------------------- | -------------------------------------------- |
+| 0     | Project setup          | flake.nix, Makefile, base dependencies       |
+| 1     | PTY foundation         | portable-pty backend, xterm.js frontend, IPC |
+| 2     | Window management      | DE-like layout, drag, resize, z-order        |
+| 3     | Graph UI               | SVG edge overlay, edge create/delete         |
+| 4     | Message routing        | Linear webhook/polling, PTY stdin injection  |
+| 4b    | Agent state monitoring | Claude Code hooks, per-worktree settings     |
+| 5     | Agent config GUI       | Config model, TOML persistence, settings UI  |
+| 5b    | Worktree management    | git worktree lifecycle, UI                   |
+| 6     | MVP integration        | 3-agent demo, end-to-end validation          |
 
 All tasks are tracked in the [Linear project](https://linear.app/conao3/project/rust-agent-cockpit-2c9d205c0d4d).
 

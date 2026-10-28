@@ -57,7 +57,11 @@ function asStringList(value: unknown, path: string): string[] {
 function parseAgentSettingsDocument(payload: unknown): AgentSettingsDocument {
   const root = asRecord(payload, "root");
   const version = root.version;
-  if (typeof version !== "number" || !Number.isFinite(version) || version <= 0) {
+  if (
+    typeof version !== "number" ||
+    !Number.isFinite(version) ||
+    version <= 0
+  ) {
     fail("root.version must be positive number");
   }
   const agents = root.agents;
@@ -85,12 +89,16 @@ function parseAgentSettingsDocument(payload: unknown): AgentSettingsDocument {
   };
 }
 
-export async function agentSettingsGet(req: AgentSettingsGetRequest): Promise<AgentSettingsDocument> {
+export async function agentSettingsGet(
+  req: AgentSettingsGetRequest,
+): Promise<AgentSettingsDocument> {
   const payload = await invoke<unknown>("agent_settings_get", { req });
   return parseAgentSettingsDocument(payload);
 }
 
-export async function agentSettingsSave(req: AgentSettingsSaveRequest): Promise<AgentSettingsDocument> {
+export async function agentSettingsSave(
+  req: AgentSettingsSaveRequest,
+): Promise<AgentSettingsDocument> {
   const payload = await invoke<unknown>("agent_settings_save", { req });
   return parseAgentSettingsDocument(payload);
 }

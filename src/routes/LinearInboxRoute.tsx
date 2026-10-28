@@ -21,15 +21,20 @@ const initialForm: FormState = {
   source: "linear-webhook",
 };
 
-const labelClass = "text-xs font-semibold uppercase tracking-[0.08em] text-slate-400";
+const labelClass =
+  "text-xs font-semibold uppercase tracking-[0.08em] text-slate-400";
 const inputClass =
   "w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-300";
 
 export function LinearInboxRoute() {
-  const { cockpit_id: cockpitId } = useParams({ from: "/agent-cockpit/$cockpit_id/inbox" });
+  const { cockpit_id: cockpitId } = useParams({
+    from: "/agent-cockpit/$cockpit_id/inbox",
+  });
   const [form, setForm] = useState<FormState>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [response, setResponse] = useState<LinearMessageIngestResponse | null>(null);
+  const [response, setResponse] = useState<LinearMessageIngestResponse | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -47,7 +52,9 @@ export function LinearInboxRoute() {
       });
       setResponse(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "failed to ingest linear comment");
+      setError(
+        err instanceof Error ? err.message : "failed to ingest linear comment",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -56,17 +63,24 @@ export function LinearInboxRoute() {
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-6 p-6 text-slate-100">
       <header className="space-y-1">
-        <h2 className="m-0 text-2xl font-bold tracking-[0.02em]">Linear Inbox</h2>
+        <h2 className="m-0 text-2xl font-bold tracking-[0.02em]">
+          Linear Inbox
+        </h2>
         <div className="m-0 text-sm text-slate-400">Cockpit: {cockpitId}</div>
       </header>
 
-      <form className="grid gap-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4" onSubmit={onSubmit}>
+      <form
+        className="grid gap-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+        onSubmit={onSubmit}
+      >
         <label className="grid gap-1">
           <span className={labelClass}>Issue ID</span>
           <input
             className={inputClass}
             value={form.issueId}
-            onChange={(e) => setForm((prev) => ({ ...prev, issueId: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, issueId: e.target.value }))
+            }
             placeholder="ENG-123"
             required
           />
@@ -76,7 +90,9 @@ export function LinearInboxRoute() {
           <textarea
             className={`${inputClass} min-h-28 resize-y`}
             value={form.body}
-            onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, body: e.target.value }))
+            }
             placeholder="Status update..."
             required
           />
@@ -87,7 +103,9 @@ export function LinearInboxRoute() {
             <input
               className={inputClass}
               value={form.targetMember}
-              onChange={(e) => setForm((prev) => ({ ...prev, targetMember: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, targetMember: e.target.value }))
+              }
               placeholder="MemberA"
             />
           </label>
@@ -96,7 +114,9 @@ export function LinearInboxRoute() {
             <input
               className={inputClass}
               value={form.commentId}
-              onChange={(e) => setForm((prev) => ({ ...prev, commentId: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, commentId: e.target.value }))
+              }
               placeholder="lin_cmt_abc123"
             />
           </label>
@@ -106,7 +126,9 @@ export function LinearInboxRoute() {
           <input
             className={inputClass}
             value={form.source}
-            onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, source: e.target.value }))
+            }
             placeholder="linear-webhook"
           />
         </label>
@@ -119,7 +141,11 @@ export function LinearInboxRoute() {
         </button>
       </form>
 
-      {error ? <div className="m-0 rounded-md border border-rose-800 bg-rose-950/50 p-3 text-sm text-rose-200">{error}</div> : null}
+      {error ? (
+        <div className="m-0 rounded-md border border-rose-800 bg-rose-950/50 p-3 text-sm text-rose-200">
+          {error}
+        </div>
+      ) : null}
 
       {response ? (
         <pre className="m-0 overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs leading-5 text-slate-200">

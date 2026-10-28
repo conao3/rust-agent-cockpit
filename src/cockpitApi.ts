@@ -84,12 +84,16 @@ export async function cockpitList(): Promise<CockpitDocument[]> {
   return parseCockpitList(payload);
 }
 
-export async function cockpitCreate(req: CockpitCreateRequest): Promise<CockpitDocument> {
+export async function cockpitCreate(
+  req: CockpitCreateRequest,
+): Promise<CockpitDocument> {
   const payload = await invoke<unknown>("cockpit_create", { req });
   return parseCockpit(payload);
 }
 
-export async function cockpitDelete(req: CockpitDeleteRequest): Promise<CockpitDeleteResponse> {
+export async function cockpitDelete(
+  req: CockpitDeleteRequest,
+): Promise<CockpitDeleteResponse> {
   const payload = await invoke<unknown>("cockpit_delete", { req });
   return parseDelete(payload);
 }

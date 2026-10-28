@@ -18,12 +18,12 @@ Workspace
 
 ### When to create each
 
-| Concept | When to create |
-|---|---|
-| **Project** | One per repository or major product area |
-| **Milestone** | One per development phase (Phase 0, Phase 1, …) |
-| **Issue** | One per meaningful unit of work (can be completed in one session) |
-| **Sub-issue** | When an Issue needs to be broken down further |
+| Concept       | When to create                                                    |
+| ------------- | ----------------------------------------------------------------- |
+| **Project**   | One per repository or major product area                          |
+| **Milestone** | One per development phase (Phase 0, Phase 1, …)                   |
+| **Issue**     | One per meaningful unit of work (can be completed in one session) |
+| **Sub-issue** | When an Issue needs to be broken down further                     |
 
 ## Project Setup Checklist
 
@@ -62,12 +62,12 @@ Parent Issues represent a coherent area of work. Sub-issues are the actual imple
 
 ## Priority Levels
 
-| Priority | Use |
-|---|---|
-| Urgent | Must be done before anything else (blocks other phases) |
-| High | Core feature, current phase |
-| Medium | Important but not blocking |
-| Low | Nice to have, research, or future work |
+| Priority | Use                                                     |
+| -------- | ------------------------------------------------------- |
+| Urgent   | Must be done before anything else (blocks other phases) |
+| High     | Core feature, current phase                             |
+| Medium   | Important but not blocking                              |
+| Low      | Nice to have, research, or future work                  |
 
 Set priority based on the phase: Phase 0–1 tasks are Urgent, Phase 2–4 are High, Phase 5–6 are Medium.
 
@@ -84,6 +84,7 @@ Each agent is associated with one Linear Issue (its current task). Other agents 
 ```
 
 cockpit monitors for new comments via:
+
 1. **Linear Webhook** (preferred) — push notification when a comment is created
 2. **Polling** (fallback) — cockpit polls the Linear API at a configurable interval
 
@@ -131,6 +132,7 @@ export LINEAR_API_KEY=lin_api_...
 ```
 
 The API key is used for:
+
 - Fetching Issue and comment data
 - Posting comments on behalf of agents (via cockpit)
 - Registering and receiving webhooks

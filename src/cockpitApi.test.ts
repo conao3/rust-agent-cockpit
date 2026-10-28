@@ -48,7 +48,9 @@ describe("cockpitApi", () => {
 
     const result = await cockpitCreate({ cockpit });
 
-    expect(invokeMock).toHaveBeenCalledWith("cockpit_create", { req: { cockpit } });
+    expect(invokeMock).toHaveBeenCalledWith("cockpit_create", {
+      req: { cockpit },
+    });
     expect(result).toEqual(cockpit);
   });
 

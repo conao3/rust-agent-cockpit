@@ -44,7 +44,15 @@ const roleBorderColors = {
   member: "border-slate-600",
 } as const;
 
-function EmbeddedTerminal({ cwd, taskId, member }: { cwd?: string; taskId?: string; member?: string }) {
+function EmbeddedTerminal({
+  cwd,
+  taskId,
+  member,
+}: {
+  cwd?: string;
+  taskId?: string;
+  member?: string;
+}) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const ptyIdRef = useRef<string | null>(null);
   const { createPty, writePty, resizePty, closePty } = usePtyMutations();
@@ -88,9 +96,11 @@ function EmbeddedTerminal({ cwd, taskId, member }: { cwd?: string; taskId?: stri
       if (!id) {
         return;
       }
-      resizePty({ id, cols: terminal.cols, rows: terminal.rows }).catch((error) => {
-        terminal.writeln(`\r\n[pty_resize error] ${String(error)}`);
-      });
+      resizePty({ id, cols: terminal.cols, rows: terminal.rows }).catch(
+        (error) => {
+          terminal.writeln(`\r\n[pty_resize error] ${String(error)}`);
+        },
+      );
     };
 
     const observer = new ResizeObserver(() => {
@@ -146,7 +156,9 @@ function EmbeddedTerminal({ cwd, taskId, member }: { cwd?: string; taskId?: stri
     };
   }, []);
 
-  return <div ref={hostRef} className="nodrag nowheel nopan h-[300px] w-[600px]" />;
+  return (
+    <div ref={hostRef} className="nodrag nowheel nopan h-[300px] w-[600px]" />
+  );
 }
 
 export function AgentNode({ id, data }: NodeProps<AgentNodeData>) {
@@ -168,21 +180,39 @@ export function AgentNode({ id, data }: NodeProps<AgentNodeData>) {
 
   if (data.expanded) {
     return (
-      <div className={`flex flex-col overflow-hidden rounded-lg border ${roleBorderColors[data.role]} bg-[#0a0a0a] shadow-lg`}>
-        <Handle type="target" position={Position.Top} className="!bg-slate-500" />
+      <div
+        className={`flex flex-col overflow-hidden rounded-lg border ${roleBorderColors[data.role]} bg-[#0a0a0a] shadow-lg`}
+      >
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="!bg-slate-500"
+        />
         <div
           className="agent-drag-handle flex cursor-grab items-center justify-between border-b border-slate-700 px-3 py-1.5"
           onClick={toggle}
         >
           <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${statusColors[data.status]}`} />
-            <span className="text-xs font-semibold text-slate-200">{data.label}</span>
+            <div
+              className={`h-2 w-2 rounded-full ${statusColors[data.status]}`}
+            />
+            <span className="text-xs font-semibold text-slate-200">
+              {data.label}
+            </span>
             <span className="text-[10px] text-slate-500">{data.role}</span>
           </div>
           <span className="text-[10px] text-slate-400">click to collapse</span>
         </div>
-        <EmbeddedTerminal cwd={data.cwd} taskId={data.taskId} member={data.member} />
-        <Handle type="source" position={Position.Bottom} className="!bg-slate-500" />
+        <EmbeddedTerminal
+          cwd={data.cwd}
+          taskId={data.taskId}
+          member={data.member}
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="!bg-slate-500"
+        />
       </div>
     );
   }
@@ -195,10 +225,16 @@ export function AgentNode({ id, data }: NodeProps<AgentNodeData>) {
       <Handle type="target" position={Position.Top} className="!bg-slate-500" />
       <div className="flex items-center gap-2">
         <div className={`h-2 w-2 rounded-full ${statusColors[data.status]}`} />
-        <span className="text-sm font-semibold text-slate-100">{data.label}</span>
+        <span className="text-sm font-semibold text-slate-100">
+          {data.label}
+        </span>
       </div>
       <div className="mt-0.5 text-[11px] text-slate-400">{data.role}</div>
-      <Handle type="source" position={Position.Bottom} className="!bg-slate-500" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-slate-500"
+      />
     </div>
   );
 }

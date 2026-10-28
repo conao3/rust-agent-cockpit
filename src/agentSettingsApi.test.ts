@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { agentSettingsGet, agentSettingsSave, type AgentSettingsDocument } from "./agentSettingsApi";
+import {
+  agentSettingsGet,
+  agentSettingsSave,
+  type AgentSettingsDocument,
+} from "./agentSettingsApi";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -22,7 +26,9 @@ describe("agentSettingsApi", () => {
 
     const result = await agentSettingsGet({ cockpitId: "default" });
 
-    expect(invokeMock).toHaveBeenCalledWith("agent_settings_get", { req: { cockpitId: "default" } });
+    expect(invokeMock).toHaveBeenCalledWith("agent_settings_get", {
+      req: { cockpitId: "default" },
+    });
     expect(result).toEqual(payload);
   });
 
@@ -52,7 +58,9 @@ describe("agentSettingsApi", () => {
   it("rejects malformed get response payload", async () => {
     invokeMock.mockResolvedValueOnce({
       version: 1,
-      agents: [{ id: "leader", name: "Leader", command: "codex", systemPrompt: null }],
+      agents: [
+        { id: "leader", name: "Leader", command: "codex", systemPrompt: null },
+      ],
     });
 
     await expect(agentSettingsGet({ cockpitId: "default" })).rejects.toThrow(
@@ -67,7 +75,9 @@ describe("agentSettingsApi", () => {
       agents: [],
     });
 
-    await expect(agentSettingsSave({ cockpitId: "default", settings })).rejects.toThrow(
+    await expect(
+      agentSettingsSave({ cockpitId: "default", settings }),
+    ).rejects.toThrow(
       "agent settings response invalid: root.version must be positive number",
     );
   });

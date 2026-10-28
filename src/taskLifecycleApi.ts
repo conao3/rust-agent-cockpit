@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export const lifecycleStates = ["sent", "ack", "in_progress", "done", "failed"] as const;
+export const lifecycleStates = [
+  "sent",
+  "ack",
+  "in_progress",
+  "done",
+  "failed",
+] as const;
 
 export type LifecycleState = (typeof lifecycleStates)[number];
 type LifecycleDecision = "applied" | "duplicate" | "stale";
@@ -109,7 +115,13 @@ function asDecision(value: unknown, path: string): LifecycleDecision {
 
 function asState(value: unknown, path: string): LifecycleState {
   const raw = asString(value, path);
-  if (raw === "sent" || raw === "ack" || raw === "in_progress" || raw === "done" || raw === "failed") {
+  if (
+    raw === "sent" ||
+    raw === "ack" ||
+    raw === "in_progress" ||
+    raw === "done" ||
+    raw === "failed"
+  ) {
     return raw;
   }
   fail(`${path} must be valid lifecycle state`);
@@ -156,7 +168,9 @@ function parseLifecycleState(payload: unknown): LifecycleStateResponse {
   };
 }
 
-export function parseLifecycleIngestResponse(payload: unknown): LifecycleIngestResponse {
+export function parseLifecycleIngestResponse(
+  payload: unknown,
+): LifecycleIngestResponse {
   const root = asRecord(payload, "root");
   return {
     decision: asDecision(root.decision, "root.decision"),
@@ -168,7 +182,9 @@ export function parseLifecycleIngestResponse(payload: unknown): LifecycleIngestR
   };
 }
 
-export async function taskRegisterDefinition(req: TaskRegistrationRequest): Promise<TaskLifecycleSnapshot> {
+export async function taskRegisterDefinition(
+  req: TaskRegistrationRequest,
+): Promise<TaskLifecycleSnapshot> {
   const payload = await invoke<unknown>("task_register_definition", {
     req: {
       taskId: req.taskId,
@@ -180,7 +196,9 @@ export async function taskRegisterDefinition(req: TaskRegistrationRequest): Prom
   return parseSnapshot(payload);
 }
 
-export async function taskTransitionLifecycle(req: TaskLifecycleTransitionRequest): Promise<TaskLifecycleSnapshot> {
+export async function taskTransitionLifecycle(
+  req: TaskLifecycleTransitionRequest,
+): Promise<TaskLifecycleSnapshot> {
   const payload = await invoke<unknown>("task_transition_lifecycle", {
     req: {
       taskId: req.taskId,
@@ -194,7 +212,9 @@ export async function taskTransitionLifecycle(req: TaskLifecycleTransitionReques
   return parseSnapshot(payload);
 }
 
-export async function taskGetLifecycle(req: TaskLifecycleLookupRequest): Promise<TaskLifecycleSnapshot> {
+export async function taskGetLifecycle(
+  req: TaskLifecycleLookupRequest,
+): Promise<TaskLifecycleSnapshot> {
   const payload = await invoke<unknown>("task_get_lifecycle", {
     req: {
       taskId: req.taskId,

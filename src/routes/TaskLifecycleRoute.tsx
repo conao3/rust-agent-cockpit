@@ -12,7 +12,15 @@ import {
   type TaskLifecycleSnapshot,
 } from "../taskLifecycleApi";
 
-const uiStates = ["queued", "sent", "acknowledged", "in_progress", "in_review", "done", "failed"] as const;
+const uiStates = [
+  "queued",
+  "sent",
+  "acknowledged",
+  "in_progress",
+  "in_review",
+  "done",
+  "failed",
+] as const;
 type UiState = (typeof uiStates)[number];
 
 type MemberFilter = "all" | string;
@@ -87,7 +95,15 @@ const statusMeta: Record<UiState, { icon: string; textClass: string }> = {
   failed: { icon: "✕", textClass: "text-rose-400" },
 };
 
-const matrixOrder: UiState[] = ["queued", "sent", "acknowledged", "in_progress", "in_review", "done", "failed"];
+const matrixOrder: UiState[] = [
+  "queued",
+  "sent",
+  "acknowledged",
+  "in_progress",
+  "in_review",
+  "done",
+  "failed",
+];
 
 function toSla(task: TrackedTask, now: number): TaskSla {
   if (task.updatedAtMs === null) {
@@ -107,7 +123,10 @@ function toSla(task: TrackedTask, now: number): TaskSla {
   return { status: "ok", elapsedMs };
 }
 
-function applySnapshot(current: TrackedTask[], snapshot: TaskLifecycleSnapshot): TrackedTask[] {
+function applySnapshot(
+  current: TrackedTask[],
+  snapshot: TaskLifecycleSnapshot,
+): TrackedTask[] {
   const key = `${snapshot.taskId}:${snapshot.member}`;
   const nextRow: TrackedTask = {
     taskId: snapshot.taskId,
@@ -118,7 +137,9 @@ function applySnapshot(current: TrackedTask[], snapshot: TaskLifecycleSnapshot):
     historyLen: snapshot.historyLen,
     lastEventId: snapshot.lastEventId,
   };
-  const index = current.findIndex((entry) => `${entry.taskId}:${entry.member}` === key);
+  const index = current.findIndex(
+    (entry) => `${entry.taskId}:${entry.member}` === key,
+  );
   if (index < 0) {
     return [...current, nextRow];
   }
@@ -130,9 +151,14 @@ function applySnapshot(current: TrackedTask[], snapshot: TaskLifecycleSnapshot):
   return copy;
 }
 
-function updateFromIngest(current: TrackedTask[], payload: ReturnType<typeof parseLifecycleIngestResponse>): TrackedTask[] {
+function updateFromIngest(
+  current: TrackedTask[],
+  payload: ReturnType<typeof parseLifecycleIngestResponse>,
+): TrackedTask[] {
   const key = `${payload.taskId}:${payload.member}`;
-  const index = current.findIndex((entry) => `${entry.taskId}:${entry.member}` === key);
+  const index = current.findIndex(
+    (entry) => `${entry.taskId}:${entry.member}` === key,
+  );
   if (index < 0) {
     return [
       ...current,
@@ -158,11 +184,21 @@ function updateFromIngest(current: TrackedTask[], payload: ReturnType<typeof par
 }
 
 const initialTasks: TrackedTask[] = [
-  { taskId: "CON-107", member: "MemberB", title: "Task Lifecycle Monitor", state: "in_progress", updatedAtMs: null, historyLen: 0, lastEventId: null },
+  {
+    taskId: "CON-107",
+    member: "MemberB",
+    title: "Task Lifecycle Monitor",
+    state: "in_progress",
+    updatedAtMs: null,
+    historyLen: 0,
+    lastEventId: null,
+  },
 ];
 
 export function TaskLifecycleRoute() {
-  const { cockpit_id: cockpitId } = useParams({ from: "/agent-cockpit/$cockpit_id/tasks" });
+  const { cockpit_id: cockpitId } = useParams({
+    from: "/agent-cockpit/$cockpit_id/tasks",
+  });
   const [tasks, setTasks] = useState<TrackedTask[]>(initialTasks);
   const [taskIdInput, setTaskIdInput] = useState("CON-107");
   const [memberInput, setMemberInput] = useState("MemberB");
@@ -188,7 +224,10 @@ export function TaskLifecycleRoute() {
     const refreshed = await Promise.all(
       tasks.map(async (entry) => {
         try {
-          const snapshot = await taskGetLifecycle({ taskId: entry.taskId, member: entry.member });
+          const snapshot = await taskGetLifecycle({
+            taskId: entry.taskId,
+            member: entry.member,
+          });
           return {
             ...entry,
             title: snapshot.title,
@@ -198,7 +237,10 @@ export function TaskLifecycleRoute() {
             lastEventId: snapshot.lastEventId,
           } satisfies TrackedTask;
         } catch {
-          const fallback = await monitoringGetLifecycleState({ taskId: entry.taskId, member: entry.member });
+          const fallback = await monitoringGetLifecycleState({
+            taskId: entry.taskId,
+            member: entry.member,
+          });
           if (!fallback) {
             return entry;
           }
@@ -273,7 +315,9 @@ export function TaskLifecycleRoute() {
   };
 
   const memberChoices = useMemo(() => {
-    const members = Array.from(new Set(tasks.map((task) => task.member))).sort();
+    const members = Array.from(
+      new Set(tasks.map((task) => task.member)),
+    ).sort();
     return ["all", ...members];
   }, [tasks]);
 
@@ -326,15 +370,22 @@ export function TaskLifecycleRoute() {
       <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-6">
         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#1f1f1f] pb-4">
           <div>
-            <div className="m-0 font-mono text-xs text-[#737373]">task_lifecycle_monitor</div>
-            <h2 className="m-0 font-mono text-2xl font-semibold text-[#e5e5e5]">Task Lifecycle Monitor</h2>
+            <div className="m-0 font-mono text-xs text-[#737373]">
+              task_lifecycle_monitor
+            </div>
+            <h2 className="m-0 font-mono text-2xl font-semibold text-[#e5e5e5]">
+              Task Lifecycle Monitor
+            </h2>
             <div className="m-0 mt-1 font-mono text-xs text-[#737373]">
               real-time task orchestration state across agents
             </div>
           </div>
           <div className="text-right font-mono text-xs text-[#737373]">
             <div className="m-0">cockpit: {cockpitId}</div>
-            <div className="m-0">realtime: {lastRealtime ? formatElapsed(tick - lastRealtime) : "waiting"}</div>
+            <div className="m-0">
+              realtime:{" "}
+              {lastRealtime ? formatElapsed(tick - lastRealtime) : "waiting"}
+            </div>
             <div className="m-0">tracked: {tasks.length}</div>
           </div>
         </header>
@@ -343,9 +394,18 @@ export function TaskLifecycleRoute() {
           {matrixOrder.map((state) => {
             const meta = statusMeta[state];
             return (
-              <article key={state} className="rounded border border-[#1f1f1f] bg-[#171717] p-3 font-mono">
-                <div className={`m-0 text-[11px] uppercase tracking-[0.08em] ${meta.textClass}`}>{state}</div>
-                <div className={`m-0 mt-1 text-xl font-semibold ${meta.textClass}`}>
+              <article
+                key={state}
+                className="rounded border border-[#1f1f1f] bg-[#171717] p-3 font-mono"
+              >
+                <div
+                  className={`m-0 text-[11px] uppercase tracking-[0.08em] ${meta.textClass}`}
+                >
+                  {state}
+                </div>
+                <div
+                  className={`m-0 mt-1 text-xl font-semibold ${meta.textClass}`}
+                >
                   {meta.icon} {counts[state]}
                 </div>
               </article>
@@ -391,7 +451,11 @@ export function TaskLifecycleRoute() {
               refresh
             </button>
           </div>
-          {message ? <div className="m-0 mt-2 font-mono text-xs text-[#a3a3a3]">{message}</div> : null}
+          {message ? (
+            <div className="m-0 mt-2 font-mono text-xs text-[#a3a3a3]">
+              {message}
+            </div>
+          ) : null}
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
@@ -402,7 +466,9 @@ export function TaskLifecycleRoute() {
                 <select
                   aria-label="status filter"
                   value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value as UiState | "all")}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value as UiState | "all")
+                  }
                   className="ml-2 rounded border border-[#2a2a2a] bg-[#111111] px-2 py-1 text-xs text-[#e5e5e5]"
                 >
                   <option value="all">all</option>
@@ -460,14 +526,23 @@ export function TaskLifecycleRoute() {
                           ? "text-amber-400"
                           : "text-emerald-400";
                     return (
-                      <tr key={`${task.taskId}:${task.member}`} className="border-b border-[#1f1f1f] text-[#e5e5e5]">
-                        <td className="py-2 pr-3 text-[#a3a3a3]">{task.taskId}</td>
+                      <tr
+                        key={`${task.taskId}:${task.member}`}
+                        className="border-b border-[#1f1f1f] text-[#e5e5e5]"
+                      >
+                        <td className="py-2 pr-3 text-[#a3a3a3]">
+                          {task.taskId}
+                        </td>
                         <td className="py-2 pr-3">{task.member}</td>
                         <td className={`py-2 pr-3 ${meta.textClass}`}>
                           {meta.icon} {uiState}
                         </td>
-                        <td className="py-2 pr-3 text-[#737373]">{formatElapsed(sla.elapsedMs)}</td>
-                        <td className={`py-2 pr-3 uppercase ${slaClass}`}>{sla.status}</td>
+                        <td className="py-2 pr-3 text-[#737373]">
+                          {formatElapsed(sla.elapsedMs)}
+                        </td>
+                        <td className={`py-2 pr-3 uppercase ${slaClass}`}>
+                          {sla.status}
+                        </td>
                         <td className="py-2">
                           <div className="flex flex-wrap gap-1">
                             {lifecycleStates.map((state) => (
@@ -492,23 +567,34 @@ export function TaskLifecycleRoute() {
 
           <aside className="rounded border border-[#1f1f1f] bg-[#171717] p-4 font-mono">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="m-0 text-sm font-semibold text-rose-400">sla_alerts</h3>
-              <span className="text-xs text-rose-300">{alerts.length} active</span>
+              <h3 className="m-0 text-sm font-semibold text-rose-400">
+                sla_alerts
+              </h3>
+              <span className="text-xs text-rose-300">
+                {alerts.length} active
+              </span>
             </div>
             <div className="space-y-2">
-              {alerts.length === 0 ? <div className="m-0 text-xs text-[#737373]">no active SLA alerts</div> : null}
+              {alerts.length === 0 ? (
+                <div className="m-0 text-xs text-[#737373]">
+                  no active SLA alerts
+                </div>
+              ) : null}
               {alerts.map(({ task, sla }) => (
                 <article
                   key={`${task.taskId}:${task.member}`}
                   className={`rounded border p-2 ${
-                    sla.status === "breach" ? "border-rose-500/40 bg-rose-950/20" : "border-amber-500/40 bg-amber-950/20"
+                    sla.status === "breach"
+                      ? "border-rose-500/40 bg-rose-950/20"
+                      : "border-amber-500/40 bg-amber-950/20"
                   }`}
                 >
                   <div className="m-0 text-xs text-[#e5e5e5]">
                     {task.taskId} - {task.member}
                   </div>
                   <div className="m-0 mt-1 text-[11px] text-[#737373]">
-                    elapsed: {formatElapsed(sla.elapsedMs)} / threshold {task.state === "sent" ? "60s" : "120s"}
+                    elapsed: {formatElapsed(sla.elapsedMs)} / threshold{" "}
+                    {task.state === "sent" ? "60s" : "120s"}
                   </div>
                 </article>
               ))}

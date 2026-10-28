@@ -3,7 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Button, Input, Label, SearchField } from "react-aria-components";
-import { cockpitCreate, cockpitDelete, cockpitList, type CockpitDocument } from "../cockpitApi";
+import {
+  cockpitCreate,
+  cockpitDelete,
+  cockpitList,
+  type CockpitDocument,
+} from "../cockpitApi";
 import { buildNewCockpitDocument, filterCockpits } from "./cockpitListModel";
 
 const buttonBaseClass =
@@ -27,7 +32,11 @@ export function CockpitListRoute() {
   const [query, setQuery] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const { data: rows = [], isLoading: loading, error: queryError } = useQuery({
+  const {
+    data: rows = [],
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: ["cockpitList"] as const,
     queryFn: cockpitList,
   });
@@ -36,16 +45,24 @@ export function CockpitListRoute() {
     mutationFn: () => cockpitCreate({ cockpit: buildNewCockpitDocument() }),
     onMutate: () => setPendingId("new"),
     onSettled: () => setPendingId(null),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => cockpitDelete({ id }),
     onSettled: () => setPendingId(null),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const }),
   });
 
-  const error = queryError ? String(queryError) : createMutation.error ? String(createMutation.error) : deleteMutation.error ? String(deleteMutation.error) : null;
+  const error = queryError
+    ? String(queryError)
+    : createMutation.error
+      ? String(createMutation.error)
+      : deleteMutation.error
+        ? String(deleteMutation.error)
+        : null;
 
   const filtered = useMemo(() => filterCockpits(rows, query), [rows, query]);
 
@@ -63,14 +80,33 @@ export function CockpitListRoute() {
         <section className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">Cockpit List</h2>
-              <div className="m-0 text-sm text-slate-400">Manage cockpit entries and jump into `/agent-cockpit/:cockpit_id`.</div>
+              <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">
+                Cockpit List
+              </h2>
+              <div className="m-0 text-sm text-slate-400">
+                Manage cockpit entries and jump into
+                `/agent-cockpit/:cockpit_id`.
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onPress={() => queryClient.invalidateQueries({ queryKey: ["cockpitList"] as const })} isDisabled={loading || pendingId !== null} className={buttonBaseClass}>
+              <Button
+                type="button"
+                onPress={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: ["cockpitList"] as const,
+                  })
+                }
+                isDisabled={loading || pendingId !== null}
+                className={buttonBaseClass}
+              >
                 reload
               </Button>
-              <Button type="button" onPress={() => createMutation.mutate()} isDisabled={pendingId !== null} className={buttonBaseClass}>
+              <Button
+                type="button"
+                onPress={() => createMutation.mutate()}
+                isDisabled={pendingId !== null}
+                className={buttonBaseClass}
+              >
                 <Plus size={14} />
                 {pendingId === "new" ? "creating..." : "new cockpit"}
               </Button>
@@ -97,7 +133,10 @@ export function CockpitListRoute() {
           </div>
 
           {error ? (
-            <div role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+            <div
+              role="alert"
+              className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300"
+            >
               {error}
             </div>
           ) : null}
@@ -118,16 +157,25 @@ export function CockpitListRoute() {
               </thead>
               <tbody>
                 {filtered.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-800/80 align-top">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-200">{row.id}</td>
+                  <tr
+                    key={row.id}
+                    className="border-b border-slate-800/80 align-top"
+                  >
+                    <td className="px-4 py-3 font-mono text-xs text-slate-200">
+                      {row.id}
+                    </td>
                     <td className="px-4 py-3 text-slate-100">{row.title}</td>
-                    <td className="px-4 py-3 text-slate-300">{agentLabel(row)}</td>
+                    <td className="px-4 py-3 text-slate-300">
+                      {agentLabel(row)}
+                    </td>
                     <td className="px-4 py-3">
                       <span className="rounded border border-slate-700 px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] text-slate-300">
                         {statusLabel(row)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{lastUsedLabel()}</td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {lastUsedLabel()}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         <Button
@@ -146,7 +194,9 @@ export function CockpitListRoute() {
                         <Button
                           type="button"
                           onPress={() => onDelete(row.id)}
-                          isDisabled={pendingId === row.id || pendingId === "new"}
+                          isDisabled={
+                            pendingId === row.id || pendingId === "new"
+                          }
                           className={buttonBaseClass}
                         >
                           <Trash2 size={14} />
@@ -160,9 +210,15 @@ export function CockpitListRoute() {
             </table>
           </div>
           {!loading && filtered.length === 0 ? (
-            <div className="m-0 px-4 py-5 text-sm text-slate-400">No cockpit entries found.</div>
+            <div className="m-0 px-4 py-5 text-sm text-slate-400">
+              No cockpit entries found.
+            </div>
           ) : null}
-          {loading ? <div className="m-0 px-4 py-5 text-sm text-slate-400">Loading cockpits...</div> : null}
+          {loading ? (
+            <div className="m-0 px-4 py-5 text-sm text-slate-400">
+              Loading cockpits...
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

@@ -21,7 +21,12 @@ const defaultFormState: BootstrapFormState = {
 export function MvpRoute() {
   const [form, setForm] = useState<BootstrapFormState>(defaultFormState);
 
-  const { data: rows = [], isLoading: loading, error: queryError, refetch } = useQuery({
+  const {
+    data: rows = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
     queryKey: ["worktreeList", ".wt"] as const,
     queryFn: () => worktreeList({ basedir: ".wt" }),
   });
@@ -44,8 +49,13 @@ export function MvpRoute() {
         <section className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">MVP Session Bootstrap</h2>
-              <div className="m-0 text-sm text-slate-400">Prepare task context, then start the cockpit terminal + graph session.</div>
+              <h2 className="m-0 text-xl font-semibold tracking-[0.02em] text-slate-100">
+                MVP Session Bootstrap
+              </h2>
+              <div className="m-0 text-sm text-slate-400">
+                Prepare task context, then start the cockpit terminal + graph
+                session.
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
@@ -72,7 +82,12 @@ export function MvpRoute() {
               <input
                 aria-label="task id"
                 value={form.taskId}
-                onChange={(event) => setForm((current) => ({ ...current, taskId: event.target.value }))}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    taskId: event.target.value,
+                  }))
+                }
                 placeholder="CON-31"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100"
               />
@@ -83,7 +98,10 @@ export function MvpRoute() {
                 aria-label="member"
                 value={form.member}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, member: event.target.value as BootstrapFormState["member"] }))
+                  setForm((current) => ({
+                    ...current,
+                    member: event.target.value as BootstrapFormState["member"],
+                  }))
                 }
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100"
               >
@@ -99,7 +117,12 @@ export function MvpRoute() {
               <input
                 aria-label="cwd"
                 value={form.cwd}
-                onChange={(event) => setForm((current) => ({ ...current, cwd: event.target.value }))}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    cwd: event.target.value,
+                  }))
+                }
                 placeholder="./.wt/con-31-mvp"
                 className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100"
               />
@@ -113,11 +136,16 @@ export function MvpRoute() {
             >
               start cockpit session
             </a>
-            <span className="text-xs text-slate-500">/agent-cockpit/default{search || ""}</span>
+            <span className="text-xs text-slate-500">
+              /agent-cockpit/default{search || ""}
+            </span>
           </div>
 
           {error ? (
-            <div role="alert" className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+            <div
+              role="alert"
+              className="mt-3 rounded-md border border-rose-900 bg-rose-950/60 px-3 py-2 text-sm text-rose-300"
+            >
               {error}
             </div>
           ) : null}
@@ -125,12 +153,18 @@ export function MvpRoute() {
 
         <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h3 className="m-0 text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">Detected Worktrees</h3>
-            <span className="text-xs text-slate-500">{rows.length} item(s)</span>
+            <h3 className="m-0 text-sm font-semibold uppercase tracking-[0.08em] text-slate-300">
+              Detected Worktrees
+            </h3>
+            <span className="text-xs text-slate-500">
+              {rows.length} item(s)
+            </span>
           </div>
           {rows.length === 0 ? (
             <div className="m-0 text-sm text-slate-400">
-              {loading ? "Loading worktrees..." : "No worktrees detected under .wt"}
+              {loading
+                ? "Loading worktrees..."
+                : "No worktrees detected under .wt"}
             </div>
           ) : (
             <ul className="m-0 grid list-none gap-2 p-0">
@@ -140,8 +174,12 @@ export function MvpRoute() {
                   className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-950/70 px-3 py-2"
                 >
                   <div className="min-w-0">
-                    <div className="m-0 text-sm font-semibold text-slate-100">{row.branch}</div>
-                    <div className="m-0 truncate text-xs text-slate-500">{row.worktreeDir}</div>
+                    <div className="m-0 text-sm font-semibold text-slate-100">
+                      {row.branch}
+                    </div>
+                    <div className="m-0 truncate text-xs text-slate-500">
+                      {row.worktreeDir}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="rounded border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
