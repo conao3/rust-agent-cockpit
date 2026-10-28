@@ -2,5 +2,3 @@ overrides:
   esbuild: ^0.28.1
 ignoredBuiltDependencies:
   - esbuild
-minimumReleaseAgeExclude:
-  - lucide-react@1.63.0
