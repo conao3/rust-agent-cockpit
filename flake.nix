@@ -35,12 +35,10 @@
           overlay =
             final: prev:
             let
-              nodejs = prev.nodejs_latest;
-              pnpm = prev.pnpm.override { nodejs-slim = nodejs; };
               rustToolchain = prev.rust-bin.stable.latest.default;
             in
             {
-              inherit nodejs pnpm rustToolchain;
+              inherit rustToolchain;
             };
           pkgs = import inputs.nixpkgs {
             inherit system;
@@ -49,6 +47,8 @@
               overlay
             ];
           };
+          nodejs = pkgs.nodejs_26;
+          pnpm = pkgs.pnpm.override { nodejs-slim = pkgs.nodejs-slim_26; };
 
           linuxBuildInputs = with pkgs; [
             webkitgtk_4_1
