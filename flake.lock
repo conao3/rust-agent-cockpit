@@ -85,38 +85,8 @@
       "inputs": {
         "flake-parts": "flake-parts",
         "nixpkgs": "nixpkgs",
-        "rust-gitq": "rust-gitq",
         "rust-overlay": "rust-overlay",
         "treefmt-nix": "treefmt-nix"
-      }
-    },
-    "rust-gitq": {
-      "inputs": {
-        "flake-parts": [
-          "flake-parts"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "rust-overlay": [
-          "rust-overlay"
-        ],
-        "treefmt-nix": [
-          "treefmt-nix"
-        ]
-      },
-      "locked": {
-        "lastModified": 1792920952,
-        "narHash": "sha256-7rRFergwhmSR88kacKGF1FgOxUqHzDdP7FPQBMXTjy0=",
-        "ref": "refs/heads/master",
-        "rev": "91e820c9d32951f6206167f68a705ebe519842ae",
-        "revCount": 54,
-        "type": "git",
-        "url": "file:///home/conao/ghq/github.com/conao3/rust-gitq"
-      },
-      "original": {
-        "type": "git",
-        "url": "file:///home/conao/ghq/github.com/conao3/rust-gitq"
       }
     },
     "rust-overlay": {

@@ -4,13 +4,6 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     rust-overlay.url = "github:oxalica/rust-overlay";
-    rust-gitq = {
-      url = "git+file:///home/conao/ghq/github.com/conao3/rust-gitq";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-parts.follows = "flake-parts";
-      inputs.treefmt-nix.follows = "treefmt-nix";
-      inputs.rust-overlay.follows = "rust-overlay";
-    };
   };
 
   outputs =
