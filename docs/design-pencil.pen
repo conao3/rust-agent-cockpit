@@ -1076,7 +1076,7 @@
                           "id": "aahx8",
                           "name": "tmStats",
                           "fill": "#525252",
-                          "content": "2 running · 1 queued · 1 pending · 1 done",
+                          "content": "2 running, 1 queued, 1 pending, 1 done",
                           "fontFamily": "JetBrains Mono",
                           "fontSize": 10,
                           "fontWeight": "normal"
