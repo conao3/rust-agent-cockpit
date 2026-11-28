@@ -5,22 +5,27 @@ Each agent runs in its own PTY terminal window. Windows are connected by edges (
 
 ## Concept
 
-```
-+------------------+        +------------------+
-|  Leader Agent    |------->|  Member Agent A  |
-|  (PTY window)    |        |  (PTY window)    |
-+------------------+        +------------------+
-         |
-         v
-+------------------+
-|  Member Agent B  |
-|  (PTY window)    |
-+------------------+
-```
+![Agent graph with a leader connected to two members](images/graph.png)
+
+The screenshots in this README show placeholder data.
 
 - **Window**: A PTY terminal running an agent process (e.g. `claude`). Can be freely positioned and resized like a desktop environment.
 - **Edge**: A directed connection between two windows. Defines which agents can communicate with each other.
 - **Message**: A Linear Issue Comment posted by an agent. cockpit delivers it to the target agent's PTY stdin via the edge.
+
+## Screens
+
+Click an agent node to open its terminal.
+
+![Leader node expanded into a terminal](images/terminal.png)
+
+The cockpit list manages cockpit entries and opens them.
+
+![Cockpit list with search, create, open and delete](images/cockpits.png)
+
+Agent settings edits the profile of each agent.
+
+![Agent settings form](images/settings.png)
 
 ## Architecture
 
