@@ -1,4 +1,12 @@
-# agent-cockpit
+<p align="center"><img src="docs/assets/banner.png" alt="agent-cockpit: Run several AI agents as a team, each in its own terminal" width="880"></p>
+
+<p align="center"><strong>Run several AI agents as a team, each in its own terminal</strong></p>
+
+<p align="center"><a href="https://github.com/conao3/rust-agent-cockpit/actions/workflows/required-frontend-check.yml"><img src="https://github.com/conao3/rust-agent-cockpit/actions/workflows/required-frontend-check.yml/badge.svg?branch=master" alt="CI"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/conao3/rust-agent-cockpit" alt="License"></a> <a href="https://github.com/conao3/rust-agent-cockpit/stargazers"><img src="https://img.shields.io/github/stars/conao3/rust-agent-cockpit?style=flat" alt="GitHub stars"></a></p>
+
+<p align="center"><a href="#concept">Concept</a> | <a href="#architecture">Architecture</a> | <a href="#development-setup">Development Setup</a> | <a href="#development-roadmap">Development Roadmap</a></p>
+
+<h1>agent-cockpit</h1>
 
 A Tauri desktop application for running and orchestrating multiple AI agents as a team.
 Each agent runs in its own PTY terminal window. Windows are connected by edges (lines) that define communication channels between agents.
